@@ -4,9 +4,9 @@
 
 ## How to use
 
-I recommend you to make new python env for manage crawler.
+I recommend you to make new python env for managing this crawler.
 
-Before start, you should export your `GOOGLE_API_KEY` for trasnlating the abstract of papers. You can skeep if you don't need the translated abstract.
+Before start, you should export your `GOOGLE_API_KEY` for trasnlating the abstract of papers. You can skip if you don't need the translated abstract.
 
 ```bash
 export GOOGLE_API_KEY="YOUR_API_KEY"
@@ -29,6 +29,7 @@ python main.py serve
 ## Adjust the config file
 
 In `config.py` you can adjust how long you want to crawl and etc.
+
 Please check the `config.py` file.
 
 ---
