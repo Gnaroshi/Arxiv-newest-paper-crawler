@@ -1,0 +1,215 @@
+[
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05636v1",
+        "short_id": "2508.05636v1",
+        "title": "FaceAnonyMixer: Cancelable Faces via Identity Consistent Latent Space Mixing",
+        "authors": [
+            "Mohammed Talha Alam",
+            "Fahad Shamshad",
+            "Fakhri Karray",
+            "Karthik Nandakumar"
+        ],
+        "subjects": [
+            "cs.CV"
+        ],
+        "abstract": "Advancements in face recognition (FR) technologies have amplified privacy concerns, necessitating methods that protect identity while maintaining recognition utility. Existing face anonymization methods typically focus on obscuring identity but fail to meet the requirements of biometric template protection, including revocability, unlinkability, and irreversibility. We propose FaceAnonyMixer, a cancelable face generation framework that leverages the latent space of a pre-trained generative model to synthesize privacy-preserving face images. The core idea of FaceAnonyMixer is to irreversibly mix the latent code of a real face image with a synthetic code derived from a revocable key. The mixed latent code is further refined through a carefully designed multi-objective loss to satisfy all cancelable biometric requirements. FaceAnonyMixer is capable of generating high-quality cancelable faces that can be directly matched using existing FR systems without requiring any modifications. Extensive experiments on benchmark datasets demonstrate that FaceAnonyMixer delivers superior recognition accuracy while providing significantly stronger privacy protection, achieving over an 11% gain on commercial API compared to recent cancelable biometric methods. Code is available at: https://github.com/talha-alam/faceanonymixer.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05636v1",
+        "published_time_utc": "2025-08-07T17:59:59+00:00",
+        "abstract_ko": "안면 인식 기술의 발전으로 인해 개인 정보 보호에 대한 우려가 커짐에 따라, 인식 기능을 유지하면서 신원을 보호하는 방법이 필요해졌습니다. 기존의 안면 익명화 방법들은 일반적으로 신원을 숨기는 데 초점을 맞추지만, 취소 가능성, 비연결성, 비가역성을 포함한 생체 정보 템플릿 보호의 요구 사항을 충족하지 못합니다. 본 연구에서는 사전 훈련된 생성 모델의 잠재 공간을 활용하여 개인 정보를 보호하는 안면 이미지를 합성하는 취소 가능한 안면 생성 프레임워크인 FaceAnonyMixer를 제안합니다. FaceAnonyMixer의 핵심 아이디어는 실제 안면 이미지의 잠재 코드를 취소 가능한 키에서 파생된 합성 코드와 비가역적으로 혼합하는 것입니다. 혼합된 잠재 코드는 모든 취소 가능한 생체 인식 요구 사항을 충족하기 위해 신중하게 설계된 다중 목표 손실을 통해 더욱 개선됩니다. FaceAnonyMixer는 기존 안면 인식 시스템을 수정할 필요 없이 직접 일치시킬 수 있는 고품질의 취소 가능한 안면 이미지를 생성할 수 있습니다. 벤치마크 데이터 세트에 대한 광범위한 실험 결과, FaceAnonyMixer는 최근의 취소 가능한 생체 인식 방법에 비해 상용 API에서 11% 이상의 성능 향상을 달성하면서 우수한 인식 정확도와 함께 상당히 강화된 개인 정보 보호 기능을 제공함을 보여줍니다. 코드는 https://github.com/talha-alam/faceanonymixer 에서 이용 가능합니다."
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05635v1",
+        "short_id": "2508.05635v1",
+        "title": "Genie Envisioner: A Unified World Foundation Platform for Robotic Manipulation",
+        "authors": [
+            "Yue Liao",
+            "Pengfei Zhou",
+            "Siyuan Huang",
+            "Donglin Yang",
+            "Shengcong Chen",
+            "Yuxin Jiang",
+            "Yue Hu",
+            "Jingbin Cai",
+            "Si Liu",
+            "Jianlan Luo",
+            "Liliang Chen",
+            "Shuicheng Yan",
+            "Maoqing Yao",
+            "Guanghui Ren"
+        ],
+        "subjects": [
+            "cs.RO",
+            "cs.CV"
+        ],
+        "abstract": "We introduce Genie Envisioner (GE), a unified world foundation platform for robotic manipulation that integrates policy learning, evaluation, and simulation within a single video-generative framework. At its core, GE-Base is a large-scale, instruction-conditioned video diffusion model that captures the spatial, temporal, and semantic dynamics of real-world robotic interactions in a structured latent space. Built upon this foundation, GE-Act maps latent representations to executable action trajectories through a lightweight, flow-matching decoder, enabling precise and generalizable policy inference across diverse embodiments with minimal supervision. To support scalable evaluation and training, GE-Sim serves as an action-conditioned neural simulator, producing high-fidelity rollouts for closed-loop policy development. The platform is further equipped with EWMBench, a standardized benchmark suite measuring visual fidelity, physical consistency, and instruction-action alignment. Together, these components establish Genie Envisioner as a scalable and practical foundation for instruction-driven, general-purpose embodied intelligence. All code, models, and benchmarks will be released publicly.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05635v1",
+        "published_time_utc": "2025-08-07T17:59:44+00:00",
+        "abstract_ko": "로봇 조작을 위한 통합 세계 기반 플랫폼인 Genie Envisioner (GE)를 소개합니다.  이 플랫폼은 정책 학습, 평가 및 시뮬레이션을 단일 비디오 생성 프레임워크 내에 통합합니다. GE의 핵심인 GE-Base는 대규모의 지시어 조건부 비디오 확산 모델로, 구조화된 잠재 공간에서 실제 로봇 상호 작용의 공간적, 시간적, 의미적 역동성을 포착합니다. 이 기반 위에 구축된 GE-Act는 경량의 흐름 일치 디코더를 통해 잠재 표현을 실행 가능한 동작 궤적에 매핑하여 최소한의 감독으로 다양한 구현체에서 정확하고 일반화 가능한 정책 추론을 가능하게 합니다. 확장 가능한 평가 및 훈련을 지원하기 위해 GE-Sim은 동작 조건부 신경망 시뮬레이터 역할을 하며, 폐쇄 루프 정책 개발을 위한 고충실도 시뮬레이션 결과를 생성합니다. 이 플랫폼에는 시각적 충실도, 물리적 일관성 및 지시어-동작 정합성을 측정하는 표준화된 벤치마크 모음인 EWMBench도 포함되어 있습니다. 이러한 구성 요소들은 Genie Envisioner를 지시어 기반의 범용 구현 지능을 위한 확장 가능하고 실용적인 기반으로 확립합니다. 모든 코드, 모델 및 벤치마크는 공개적으로 공개될 것입니다."
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05634v1",
+        "short_id": "2508.05634v1",
+        "title": "Towards Generalizable Safety in Crowd Navigation via Conformal Uncertainty Handling",
+        "authors": [
+            "Jianpeng Yao",
+            "Xiaopan Zhang",
+            "Yu Xia",
+            "Zejin Wang",
+            "Amit K. Roy-Chowdhury",
+            "Jiachen Li"
+        ],
+        "subjects": [
+            "cs.RO",
+            "cs.AI",
+            "cs.CV",
+            "cs.LG",
+            "cs.SY",
+            "eess.SY"
+        ],
+        "abstract": "Mobile robots navigating in crowds trained using reinforcement learning are known to suffer performance degradation when faced with out-of-distribution scenarios. We propose that by properly accounting for the uncertainties of pedestrians, a robot can learn safe navigation policies that are robust to distribution shifts. Our method augments agent observations with prediction uncertainty estimates generated by adaptive conformal inference, and it uses these estimates to guide the agent's behavior through constrained reinforcement learning. The system helps regulate the agent's actions and enables it to adapt to distribution shifts. In the in-distribution setting, our approach achieves a 96.93% success rate, which is over 8.80% higher than the previous state-of-the-art baselines with over 3.72 times fewer collisions and 2.43 times fewer intrusions into ground-truth human future trajectories. In three out-of-distribution scenarios, our method shows much stronger robustness when facing distribution shifts in velocity variations, policy changes, and transitions from individual to group dynamics. We deploy our method on a real robot, and experiments show that the robot makes safe and robust decisions when interacting with both sparse and dense crowds. Our code and videos are available on https://gen-safe-nav.github.io/.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05634v1",
+        "published_time_utc": "2025-08-07T17:59:43+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05633v1",
+        "short_id": "2508.05633v1",
+        "title": "KuaiLive: A Real-time Interactive Dataset for Live Streaming Recommendation",
+        "authors": [
+            "Changle Qu",
+            "Sunhao Dai",
+            "Ke Guo",
+            "Liqin Zhao",
+            "Yanan Niu",
+            "Xiao Zhang",
+            "Jun Xu"
+        ],
+        "subjects": [
+            "cs.IR",
+            "cs.AI"
+        ],
+        "abstract": "Live streaming platforms have become a dominant form of online content consumption, offering dynamically evolving content, real-time interactions, and highly engaging user experiences. These unique characteristics introduce new challenges that differentiate live streaming recommendation from traditional recommendation settings and have garnered increasing attention from industry in recent years. However, research progress in academia has been hindered by the lack of publicly available datasets that accurately reflect the dynamic nature of live streaming environments. To address this gap, we introduce KuaiLive, the first real-time, interactive dataset collected from Kuaishou, a leading live streaming platform in China with over 400 million daily active users. The dataset records the interaction logs of 23,772 users and 452,621 streamers over a 21-day period. Compared to existing datasets, KuaiLive offers several advantages: it includes precise live room start and end timestamps, multiple types of real-time user interactions (click, comment, like, gift), and rich side information features for both users and streamers. These features enable more realistic simulation of dynamic candidate items and better modeling of user and streamer behaviors. We conduct a thorough analysis of KuaiLive from multiple perspectives and evaluate several representative recommendation methods on it, establishing a strong benchmark for future research. KuaiLive can support a wide range of tasks in the live streaming domain, such as top-K recommendation, click-through rate prediction, watch time prediction, and gift price prediction. Moreover, its fine-grained behavioral data also enables research on multi-behavior modeling, multi-task learning, and fairness-aware recommendation. The dataset and related resources are publicly available at https://imgkkk574.github.io/KuaiLive.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05633v1",
+        "published_time_utc": "2025-08-07T17:59:36+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05630v1",
+        "short_id": "2508.05630v1",
+        "title": "MOSEv2: A More Challenging Dataset for Video Object Segmentation in Complex Scenes",
+        "authors": [
+            "Henghui Ding",
+            "Kaining Ying",
+            "Chang Liu",
+            "Shuting He",
+            "Xudong Jiang",
+            "Yu-Gang Jiang",
+            "Philip H. S. Torr",
+            "Song Bai"
+        ],
+        "subjects": [
+            "cs.CV"
+        ],
+        "abstract": "Video object segmentation (VOS) aims to segment specified target objects throughout a video. Although state-of-the-art methods have achieved impressive performance (e.g., 90+% J&F) on existing benchmarks such as DAVIS and YouTube-VOS, these datasets primarily contain salient, dominant, and isolated objects, limiting their generalization to real-world scenarios. To advance VOS toward more realistic environments, coMplex video Object SEgmentation (MOSEv1) was introduced to facilitate VOS research in complex scenes. Building on the strengths and limitations of MOSEv1, we present MOSEv2, a significantly more challenging dataset designed to further advance VOS methods under real-world conditions. MOSEv2 consists of 5,024 videos and over 701,976 high-quality masks for 10,074 objects across 200 categories. Compared to its predecessor, MOSEv2 introduces significantly greater scene complexity, including more frequent object disappearance and reappearance, severe occlusions and crowding, smaller objects, as well as a range of new challenges such as adverse weather (e.g., rain, snow, fog), low-light scenes (e.g., nighttime, underwater), multi-shot sequences, camouflaged objects, non-physical targets (e.g., shadows, reflections), scenarios requiring external knowledge, etc. We benchmark 20 representative VOS methods under 5 different settings and observe consistent performance drops. For example, SAM2 drops from 76.4% on MOSEv1 to only 50.9% on MOSEv2. We further evaluate 9 video object tracking methods and find similar declines, demonstrating that MOSEv2 presents challenges across tasks. These results highlight that despite high accuracy on existing datasets, current VOS methods still struggle under real-world complexities. MOSEv2 is publicly available at https://MOSE.video.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05630v1",
+        "published_time_utc": "2025-08-07T17:59:27+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05631v1",
+        "short_id": "2508.05631v1",
+        "title": "GAP: Gaussianize Any Point Clouds with Text Guidance",
+        "authors": [
+            "Weiqi Zhang",
+            "Junsheng Zhou",
+            "Haotian Geng",
+            "Wenyuan Zhang",
+            "Yu-Shen Liu"
+        ],
+        "subjects": [
+            "cs.CV"
+        ],
+        "abstract": "3D Gaussian Splatting (3DGS) has demonstrated its advantages in achieving fast and high-quality rendering. As point clouds serve as a widely-used and easily accessible form of 3D representation, bridging the gap between point clouds and Gaussians becomes increasingly important. Recent studies have explored how to convert the colored points into Gaussians, but directly generating Gaussians from colorless 3D point clouds remains an unsolved challenge. In this paper, we propose GAP, a novel approach that gaussianizes raw point clouds into high-fidelity 3D Gaussians with text guidance. Our key idea is to design a multi-view optimization framework that leverages a depth-aware image diffusion model to synthesize consistent appearances across different viewpoints. To ensure geometric accuracy, we introduce a surface-anchoring mechanism that effectively constrains Gaussians to lie on the surfaces of 3D shapes during optimization. Furthermore, GAP incorporates a diffuse-based inpainting strategy that specifically targets at completing hard-to-observe regions. We evaluate GAP on the Point-to-Gaussian generation task across varying complexity levels, from synthetic point clouds to challenging real-world scans, and even large-scale scenes. Project Page: https://weiqi-zhang.github.io/GAP.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05631v1",
+        "published_time_utc": "2025-08-07T17:59:27+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05629v1",
+        "short_id": "2508.05629v1",
+        "title": "On the Generalization of SFT: A Reinforcement Learning Perspective with Reward Rectification",
+        "authors": [
+            "Yongliang Wu",
+            "Yizhou Zhou",
+            "Zhou Ziheng",
+            "Yingzhe Peng",
+            "Xinyu Ye",
+            "Xinting Hu",
+            "Wenbo Zhu",
+            "Lu Qi",
+            "Ming-Hsuan Yang",
+            "Xu Yang"
+        ],
+        "subjects": [
+            "cs.LG"
+        ],
+        "abstract": "We present a simple yet theoretically motivated improvement to Supervised Fine-Tuning (SFT) for the Large Language Model (LLM), addressing its limited generalization compared to reinforcement learning (RL). Through mathematical analysis, we reveal that standard SFT gradients implicitly encode a problematic reward structure that may severely restrict the generalization capabilities of model. To rectify this, we propose Dynamic Fine-Tuning (DFT), stabilizing gradient updates for each token by dynamically rescaling the objective function with the probability of this token. Remarkably, this single-line code change significantly outperforms standard SFT across multiple challenging benchmarks and base models, demonstrating greatly improved generalization. Additionally, our approach shows competitive results in offline RL settings, offering an effective yet simpler alternative. This work bridges theoretical insight and practical solutions, substantially advancing SFT performance. The code will be available at https://github.com/yongliang-wu/DFT.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05629v1",
+        "published_time_utc": "2025-08-07T17:59:04+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05628v1",
+        "short_id": "2508.05628v1",
+        "title": "H-Net++: Hierarchical Dynamic Chunking for Tokenizer-Free Language Modelling in Morphologically-Rich Languages",
+        "authors": [
+            "Mehrdad Zakershahrak",
+            "Samira Ghodratnama"
+        ],
+        "subjects": [
+            "cs.CL",
+            "cs.AI"
+        ],
+        "abstract": "Byte-level language models eliminate fragile tokenizers but face computational challenges in morphologically-rich languages (MRLs), where words span many bytes. We propose H-NET++, a hierarchical dynamic-chunking model that learns linguistically-informed segmentation through end-to-end training. Key innovations include: (1) a lightweight Transformer context-mixer (1.9M parameters) for cross-chunk attention, (2) a two-level latent hyper-prior for document-level consistency, (3) specialized handling of orthographic artifacts (e.g. Persian ZWNJ), and (4) curriculum-based training with staged sequence lengths. On a 1.4B-token Persian corpus, H-NET++ achieves state-of-the-art results: 0.159 BPB reduction versus BPE-based GPT-2-fa (12% better compression), 5.4pp gain on ParsGLUE, 53% improved robustness to ZWNJ corruption, and 73.8% F1 on gold morphological boundaries. Our learned chunks align with Persian morphology without explicit supervision, demonstrating that hierarchical dynamic chunking provides an effective tokenizer-free solution for MRLs while maintaining computational efficiency.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05628v1",
+        "published_time_utc": "2025-08-07T17:59:01+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05626v1",
+        "short_id": "2508.05626v1",
+        "title": "Physically Controllable Relighting of Photographs",
+        "authors": [
+            "Chris Careaga",
+            "Yağız Aksoy"
+        ],
+        "subjects": [
+            "cs.GR",
+            "cs.CV",
+            "I.4"
+        ],
+        "abstract": "We present a self-supervised approach to in-the-wild image relighting that enables fully controllable, physically based illumination editing. We achieve this by combining the physical accuracy of traditional rendering with the photorealistic appearance made possible by neural rendering. Our pipeline works by inferring a colored mesh representation of a given scene using monocular estimates of geometry and intrinsic components. This representation allows users to define their desired illumination configuration in 3D. The scene under the new lighting can then be rendered using a path-tracing engine. We send this approximate rendering of the scene through a feed-forward neural renderer to predict the final photorealistic relighting result. We develop a differentiable rendering process to reconstruct in-the-wild scene illumination, enabling self-supervised training of our neural renderer on raw image collections. Our method represents a significant step in bringing the explicit physical control over lights available in typical 3D computer graphics tools, such as Blender, to in-the-wild relighting.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05626v1",
+        "published_time_utc": "2025-08-07T17:58:42+00:00",
+        "abstract_ko": "failed to translate"
+    },
+    {
+        "entry_id": "http://arxiv.org/abs/2508.05625v1",
+        "short_id": "2508.05625v1",
+        "title": "How Do LLMs Persuade? Linear Probes Can Uncover Persuasion Dynamics in Multi-Turn Conversations",
+        "authors": [
+            "Brandon Jaipersaud",
+            "David Krueger",
+            "Ekdeep Singh Lubana"
+        ],
+        "subjects": [
+            "cs.CL",
+            "cs.AI",
+            "cs.LG"
+        ],
+        "abstract": "Large Language Models (LLMs) have started to demonstrate the ability to persuade humans, yet our understanding of how this dynamic transpires is limited. Recent work has used linear probes, lightweight tools for analyzing model representations, to study various LLM skills such as the ability to model user sentiment and political perspective. Motivated by this, we apply probes to study persuasion dynamics in natural, multi-turn conversations. We leverage insights from cognitive science to train probes on distinct aspects of persuasion: persuasion success, persuadee personality, and persuasion strategy. Despite their simplicity, we show that they capture various aspects of persuasion at both the sample and dataset levels. For instance, probes can identify the point in a conversation where the persuadee was persuaded or where persuasive success generally occurs across the entire dataset. We also show that in addition to being faster than expensive prompting-based approaches, probes can do just as well and even outperform prompting in some settings, such as when uncovering persuasion strategy. This suggests probes as a plausible avenue for studying other complex behaviours such as deception and manipulation, especially in multi-turn settings and large-scale dataset analysis where prompting-based methods would be computationally inefficient.",
+        "pdf_url": "http://arxiv.org/pdf/2508.05625v1",
+        "published_time_utc": "2025-08-07T17:58:41+00:00",
+        "abstract_ko": "failed to translate"
+    }
+]

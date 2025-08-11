@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>New Papers</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 2em;
+      }
+      .paper {
+        border: 1px solid #ddd;
+        padding: 1em;
+        margin-bottom: 1em;
+        border-radius: 8px;
+      }
+      h2 {
+        color: #333;
+      }
+      .authors {
+        color: #555;
+        font-style: italic;
+      }
+      .subjects {
+        margin-top: 0.5em;
+      }
+      .subjects span {
+        background-color: #eee;
+        padding: 0.2em 0.5em;
+        border-radius: 4px;
+        font-size: 0.9em;
+      }
+      .abstract {
+        margin-top: 1em;
+        padding-left: 1em;
+        border-left: 3px solid #ccc;
+      }
+      .abstract-ko {
+        margin-top: 1em;
+        padding-left: 1em;
+        border-left: 3px solid #4caf50;
+        background-color: #f9f9f9;
+      }
+      .pdf-link {
+        display: inline-block;
+        margin-top: 1em;
+        text-decoration: none;
+        background-color: #d9534f;
+        color: white;
+        padding: 0.5em 1em;
+        border-radius: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>📋 New Paper List (total {{ papers|length }} papers)</h1>
+    {% for paper in papers %}
+    <div class="paper">
+      <h2>{{ paper.title }}</h2>
+      <p class="authors">{{ paper.authors|join(', ') }}</p>
+      <div class="subjects">
+        {% for subject in paper.subjects %}
+        <span>{{ subject }}</span>
+        {% endfor %}
+      </div>
+      <details>
+        <summary><strong>Abstract (EN)</strong></summary>
+        <p class="abstract">{{ paper.abstract }}</p>
+      </details>
+      <details open>
+        <summary><strong>Abstract (KR)</strong></summary>
+        <p class="abstract-ko">{{ paper.abstract_ko }}</p>
+      </details>
+      <a href="{{ paper.pdf_url }}" class="pdf-link" target="_blank"
+        >View PDF in Arxiv</a
+      >
+    </div>
+    {% else %}
+    <p>There is no newest paper on your setting</p>
+    {% endfor %}
+  </body>
+</html>
