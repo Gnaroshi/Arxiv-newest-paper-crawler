@@ -26,6 +26,11 @@ python main.py serve
 - 'process': runs downloading the papers, translating and making metadata(favorites.json, papers.json).
 - 'serve': runs web app via flask.
 
+## Adjust the config file
+
+In `config.py` you can adjust how long you want to crawl and etc.
+Please check the `config.py` file.
+
 ---
 
 ## TODO
