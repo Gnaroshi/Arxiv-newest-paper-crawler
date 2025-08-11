@@ -1,0 +1,52 @@
+{% extends "layout.html" %} {% block content %}
+<hgroup>
+  <h1>⭐ Saved Papers</h1>
+  <h2>You have saved {{ papers|length }} paper(s).</h2>
+</hgroup>
+
+{% for paper in papers %}
+<article>
+  <header>
+    <strong>{{ paper.title }}</strong>
+  </header>
+  <p><i>{{ paper.authors|join(', ') }}</i></p>
+  <footer>
+    <details>
+      <summary><strong>Abstract (English)</strong></summary>
+      <p>{{ paper.abstract }}</p>
+    </details>
+    <details open>
+      <summary><strong>Abstract (Korean)</strong></summary>
+      <p>{{ paper.abstract_ko }}</p>
+    </details>
+    <div
+      style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center"
+    >
+      <a
+        href="{{ paper.pdf_url }}"
+        target="_blank"
+        role="button"
+        class="secondary outline"
+        >View PDF</a
+      >
+
+      <form
+        action="{{ url_for('toggle_favorite', short_id=paper.short_id) }}"
+        method="post"
+        style="margin-bottom: 0"
+      >
+        {% if paper.short_id in favorite_ids %}
+        <button type="submit" class="contrast">★ Unsave</button>
+        {% else %}
+        <button type="submit">☆ Save</button>
+        {% endif %}
+      </form>
+    </div>
+  </footer>
+</article>
+{% else %}
+<p>
+  You haven't saved any papers yet. Click the 'Save' button on the main page to
+  add papers here.
+</p>
+{% endfor %} {% endblock %}

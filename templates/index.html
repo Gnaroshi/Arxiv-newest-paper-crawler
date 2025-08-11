@@ -1,0 +1,53 @@
+{% extends "layout.html" %}
+
+{% block content %}
+  <hgroup>
+    <h1>⭐ Saved Papers</h1>
+    <h2>Your curated list of interesting papers.</h2>
+  </hgroup>
+  
+  {% if not grouped_papers %}
+    <p>You haven't saved any papers yet. Go to the <a href="{{ url_for('all_papers') }}">All Papers</a> page to find and save papers.</p>
+  {% endif %}
+
+  {% for date, papers_on_date in grouped_papers.items() %}
+    <h3 style="margin-top: 2rem; border-bottom: 1px solid var(--muted-border-color); padding-bottom: 0.5rem;">{{ date }}</h3>
+    {% for paper in papers_on_date %}
+    <article>
+      <header>
+        <strong>{{ paper.title }}</strong><br>
+        <small><i>{{ paper.authors|join(', ') }}</i></small>
+      </header>
+      
+      <div class="subject-container">
+        {% for subject in paper.subjects %}
+          <span class="subject-badge">
+            <code>{{ subject }}</code>
+            <mark>{{ subject_map.get(subject, '') }}</mark>
+          </span>
+        {% endfor %}
+      </div>
+      
+      <details>
+        <summary><strong>Abstract (English)</strong></summary>
+        <p>{{ paper.abstract }}</p>
+      </details>
+      <details open>
+        <summary><strong>Abstract (Korean)</strong></summary>
+        <p>{{ paper.abstract_ko }}</p>
+      </details>
+
+      <footer style="display: flex; gap: 0.5rem; align-items: baseline; margin-top: 1rem;">
+        <a href="{{ paper.pdf_url }}" target="_blank" role="button" class="secondary outline">View PDF</a>
+        <form action="{{ url_for('toggle_favorite', short_id=paper.short_id) }}" method="post" style="margin: 0;">
+          {% if paper.short_id in favorite_ids %}
+            <button type="submit" class="contrast">★ Unsave</button>
+          {% else %}
+            <button type="submit">☆ Save</button>
+          {% endif %}
+        </form>
+      </footer>
+    </article>
+    {% endfor %}
+  {% endfor %}
+{% endblock %}
