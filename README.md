@@ -10,7 +10,7 @@ Before start, you should export your `GOOGLE_API_KEY` for trasnlating the abstra
 
 ```bash
 export GOOGLE_API_KEY="YOUR_API_KEY"
-pip install .
+pip install -r requirements.txt
 python main.py
 ```
 
