@@ -1,2 +1,51 @@
-/pdfs/
+# Codex / agent files
+.codex/
+.codex*
+AGENTS.md
+SKILL.md
+
+# Python caches and generated files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.hypothesis/
+.tox/
+.nox/
+.cache/
+.ipynb_checkpoints/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Logs
+*.log
+
+# OS junk
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+Desktop.ini
+
+# Local config and generated app artifacts
+/config.py
+/favorites.json
+/papers.json
+/pdfs/*
 !/pdfs/.gitkeep
+/robot/
