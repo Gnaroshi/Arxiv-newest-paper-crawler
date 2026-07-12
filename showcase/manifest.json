@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "applicationId": "arxiv-discovery",
   "applicationVersion": "0.1.0",
-  "sourceCommit": "f633ce2a3ad3ea9818eed10af1cb2fe09eeca8cf",
+  "sourceCommit": "e48da6e1434adbeee8d6570816141d0f393a0fda",
   "scenarioId": "vla-no-download-paperflow-preview",
   "usesDemoData": true,
   "captureDate": "2026-07-13",
