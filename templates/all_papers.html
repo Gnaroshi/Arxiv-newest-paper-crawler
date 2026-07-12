@@ -2,8 +2,8 @@
 
 {% block content %}
   <hgroup>
-    <h1>📋 All New AI Papers</h1>
-    <h2>The latest papers from ArXiv.</h2>
+    <h1>Recent VLA candidates</h1>
+    <h2>Filter reviewed metadata, inspect one candidate, then preview a PaperFlow handoff.</h2>
   </hgroup>
   
   {% if not grouped_papers %}
@@ -38,14 +38,16 @@
       </details>
 
       <footer style="display: flex; gap: 0.5rem; align-items: baseline; margin-top: 1rem;">
-        <a href="{{ paper.pdf_url }}" target="_blank" role="button" class="secondary outline">View PDF</a>
-        <form action="{{ url_for('toggle_favorite', short_id=paper.short_id) }}" method="post" style="margin: 0;">
+        <a href="{{ url_for('paper_detail', short_id=paper.short_id) }}" role="button" class="secondary outline">Inspect candidate</a>
+        {% if showcase %}
+          <button disabled>Read-only example</button>
+        {% else %}<form action="{{ url_for('toggle_favorite', short_id=paper.short_id) }}" method="post" style="margin: 0;">
           {% if paper.short_id in favorite_ids %}
             <button type="submit" class="contrast">★ Unsave</button>
           {% else %}
             <button type="submit">☆ Save</button>
           {% endif %}
-        </form>
+        </form>{% endif %}
       </footer>
     </article>
     {% endfor %}
