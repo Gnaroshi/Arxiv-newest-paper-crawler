@@ -40,7 +40,7 @@ No repository imports crawler source or reads its internal JSON directly.
 
 ## Compatibility and migration
 
-- Provider version `0.1.0` supports manifest schema 1, integration contract 1, and Studio `>=0.1.0 <1.0.0`.
+- Provider version `0.2.0` supports manifest schema 1, integration contract 1, health/recent activity contract 1, and Studio `>=0.1.0 <1.0.0`.
 - Producer-first is preferred. New Studio with an old crawler shows setup/unavailable. New crawler without Studio remains fully usable.
 - Studio invokes only `arxiv-discovery discover --json --download=none`, fixed doctor/export operations, local candidate filtering, preview handoffs, and validated arXiv URLs.
 - Candidate fields are additive within contract 1. Unknown contract majors fail closed.

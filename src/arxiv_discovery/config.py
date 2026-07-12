@@ -36,9 +36,7 @@ DEFAULT_SUBJECT_MAP = {
 
 
 def _env(name: str) -> str | None:
-    return os.getenv(f"{ENV_PREFIX}{name}") or os.getenv(
-        f"{LEGACY_ENV_PREFIX}{name}"
-    )
+    return os.getenv(f"{ENV_PREFIX}{name}") or os.getenv(f"{LEGACY_ENV_PREFIX}{name}")
 
 
 def _env_int(name: str, default: int) -> int:
@@ -168,10 +166,7 @@ def load_settings(
         max_results=maximum,
         translate=legacy or _env_bool("TRANSLATE", False),
         download_mode="all" if legacy else "none",
-        google_api_key=(
-            os.getenv("GOOGLE_API_KEY")
-            or _env("GOOGLE_API_KEY")
-        ),
+        google_api_key=(os.getenv("GOOGLE_API_KEY") or _env("GOOGLE_API_KEY")),
         gemini_model=_env("GEMINI_MODEL") or "gemini-1.5-flash-latest",
         translation_delay_seconds=_env_float("TRANSLATION_DELAY_SECONDS", 1.0),
         flask_host=_env("FLASK_HOST") or ("0.0.0.0" if legacy else "127.0.0.1"),

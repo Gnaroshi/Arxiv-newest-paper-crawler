@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict
@@ -16,6 +18,49 @@ PROVIDER_ID = "arxiv-crawler"
 SCHEMA_VERSION = 1
 CONTRACT_VERSION = 1
 ARXIV_ID = re.compile(r"^(?:\d{4}\.\d{4,5}|[a-z-]+/\d{7})(?:v\d+)?$", re.I)
+
+
+def build_provenance() -> dict[str, Any]:
+    commit = os.environ.get("ARXIV_DISCOVERY_BUILD_COMMIT")
+    count = os.environ.get("ARXIV_DISCOVERY_BUILD_NUMBER")
+    dirty: bool | None = None
+    root = Path(__file__).resolve().parents[2]
+    if not commit and (root / ".git").exists():
+        try:
+            commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            ).stdout.strip()
+            count = subprocess.run(
+                ["git", "rev-list", "--count", "HEAD"],
+                cwd=root,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=2,
+            ).stdout.strip()
+            dirty = bool(
+                subprocess.run(
+                    ["git", "status", "--porcelain"],
+                    cwd=root,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=2,
+                ).stdout.strip()
+            )
+        except (OSError, subprocess.SubprocessError):
+            commit = None
+            count = None
+    return {
+        "commit": commit if commit and re.fullmatch(r"[0-9a-f]{40}", commit) else None,
+        "number": int(count) if count and count.isdigit() else None,
+        "dirty": dirty,
+    }
 
 
 class DuplicateHint(TypedDict):
@@ -34,9 +79,7 @@ class Candidate(TypedDict):
     updatedAt: str | None
     paperUrl: str
     pdfUrl: str
-    translationStatus: Literal[
-        "not-requested", "available", "unavailable", "failed"
-    ]
+    translationStatus: Literal["not-requested", "available", "unavailable", "failed"]
     duplicateHint: DuplicateHint
     sourceProvider: Literal["arxiv-crawler"]
     downloadedLocalPath: NotRequired[str]
@@ -65,8 +108,10 @@ class IntegrationEnvelope(TypedDict):
 
 
 def arxiv_id(value: str) -> str:
-    normalized = value.strip().removeprefix("http://arxiv.org/abs/").removeprefix(
-        "https://arxiv.org/abs/"
+    normalized = (
+        value.strip()
+        .removeprefix("http://arxiv.org/abs/")
+        .removeprefix("https://arxiv.org/abs/")
     )
     if not ARXIV_ID.fullmatch(normalized):
         raise ValueError("Invalid arXiv identifier")

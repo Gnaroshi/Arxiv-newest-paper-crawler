@@ -66,7 +66,9 @@ def create_app(settings: Settings | None = None) -> Flask:
 def run_web_app(settings: Settings | None = None) -> None:
     resolved = settings or load_settings()
     app = create_app(resolved)
-    print(f"Starting the web application at http://{resolved.flask_host}:{resolved.flask_port}")
+    print(
+        f"Starting the web application at http://{resolved.flask_host}:{resolved.flask_port}"
+    )
     app.run(
         debug=resolved.flask_debug,
         use_reloader=False,

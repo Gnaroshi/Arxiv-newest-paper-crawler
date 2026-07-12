@@ -10,7 +10,10 @@ from .provider import (
     doctor,
     emit_result,
     export_candidates,
+    recent_activity,
+    status,
     translate_selected,
+    version,
 )
 from .web.app import run_web_app
 
@@ -20,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="arxiv-discovery",
         description="Safe local arXiv paper discovery provider.",
     )
-    parser.add_argument("--version", action="version", version="%(prog)s 0.1.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
     subcommands = parser.add_subparsers(dest="command", required=True)
     discover_command = subcommands.add_parser(
         "discover", help="Discover candidates without writing local data"
@@ -58,6 +61,23 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_discovery_options(doctor_command)
     doctor_command.add_argument("--json", action="store_true")
+
+    version_command = subcommands.add_parser(
+        "version", help="Show provider and build versions"
+    )
+    version_command.add_argument("--json", action="store_true")
+
+    status_command = subcommands.add_parser(
+        "status", help="Show provider availability safely"
+    )
+    _add_discovery_options(status_command)
+    status_command.add_argument("--json", action="store_true")
+
+    recent_command = subcommands.add_parser(
+        "recent", help="Show bounded cached discovery activity"
+    )
+    recent_command.add_argument("--limit", type=int, default=5)
+    recent_command.add_argument("--json", action="store_true")
     return parser
 
 
@@ -117,10 +137,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 envelope(
                     "discover-papers",
                     status="failed",
-                    errors=[{
-                        "code": "discovery-failed",
-                        "message": "arXiv discovery failed safely.",
-                    }],
+                    errors=[
+                        {
+                            "code": "discovery-failed",
+                            "message": "arXiv discovery failed safely.",
+                        }
+                    ],
                 ),
                 json_mode=args.json,
             )
@@ -152,13 +174,23 @@ def main(argv: Sequence[str] | None = None) -> int:
                 envelope(
                     "export-candidates",
                     status="failed",
-                    errors=[{
-                        "code": "candidate-export-failed",
-                        "message": "Candidate export failed safely.",
-                    }],
+                    errors=[
+                        {
+                            "code": "candidate-export-failed",
+                            "message": "Candidate export failed safely.",
+                        }
+                    ],
                 ),
                 json_mode=args.json,
             )
     if args.command == "doctor":
         return emit_result(doctor(settings), json_mode=args.json)
+    if args.command == "version":
+        return emit_result(version(), json_mode=args.json)
+    if args.command == "status":
+        return emit_result(status(settings), json_mode=args.json)
+    if args.command == "recent":
+        return emit_result(
+            recent_activity(settings, limit=args.limit), json_mode=args.json
+        )
     return 0

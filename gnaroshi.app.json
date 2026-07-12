@@ -3,7 +3,7 @@
   "id": "arxiv-crawler",
   "displayName": "Arxiv Crawler",
   "repository": "Gnaroshi/Arxiv-newest-paper-crawler",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "platforms": ["macos", "linux"],
   "kind": "application",
   "bundleId": "",
@@ -19,14 +19,15 @@
     "app": {},
     "cli": {
       "executable": "arxiv-discovery",
-      "versionSubcommand": ["doctor", "--json"],
-      "statusSubcommand": ["doctor", "--json"],
-      "healthSubcommand": ["doctor", "--json"]
+      "versionSubcommand": ["version", "--json"],
+      "statusSubcommand": ["status", "--json"],
+      "healthSubcommand": ["doctor", "--json"],
+      "recentActivitySubcommand": ["recent", "--json", "--limit", "5"]
     },
     "localHttp": {},
     "deepLinks": []
   },
-  "health": { "timeoutMs": 3000 },
+  "health": { "contractVersion": 1, "timeoutMs": 3000, "freshnessSeconds": 86400 },
   "icon": { "kind": "system", "name": "scan-search" },
   "privacy": {
     "classification": "private-summary",
@@ -38,5 +39,9 @@
     "minimumStudioVersion": "0.1.0",
     "purpose": "Discover recent papers and preview selected candidates for handoff.",
     "readOnly": true
+  },
+  "distribution": {
+    "source": { "branch": "main", "mode": "git-fetch" },
+    "release": { "provider": "github-releases", "channel": "stable", "manifestAsset": "gnaroshi.app.json" }
   }
 }

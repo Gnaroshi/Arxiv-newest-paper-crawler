@@ -9,7 +9,13 @@ from arxiv_discovery.cli import build_parser, main
 from arxiv_discovery.collector import collect_papers
 from arxiv_discovery.config import load_settings
 from arxiv_discovery.contracts import candidate_from_paper, candidate_id, envelope
-from arxiv_discovery.provider import discover, doctor, export_candidates
+from arxiv_discovery.provider import (
+    discover,
+    doctor,
+    export_candidates,
+    recent_activity,
+    version,
+)
 from arxiv_discovery.storage import save_papers
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -41,6 +47,14 @@ def test_manifest_declares_real_fixed_provider_entrypoints() -> None:
     assert manifest["entrypoints"]["deepLinks"] == []
     assert manifest["privacy"]["credentials"] == "provider-owned"
     assert "open-arxiv-paper" in manifest["capabilities"]
+    assert manifest["entrypoints"]["cli"]["recentActivitySubcommand"] == [
+        "recent",
+        "--json",
+        "--limit",
+        "5",
+    ]
+    assert manifest["health"]["contractVersion"] == 1
+    assert manifest["distribution"]["source"]["mode"] == "git-fetch"
 
 
 def test_candidate_schema_is_stable_across_arxiv_versions() -> None:
@@ -148,16 +162,18 @@ def test_cli_json_is_one_stdout_value_and_configuration_is_typed(
             },
         ),
     )
-    exit_code = main([
-        "discover",
-        "--json",
-        "--download=none",
-        "--timezone=UTC",
-        "--cutoff-time=06:30",
-        "--category=cs.CL",
-        "--days=2",
-        "--max-results=25",
-    ])
+    exit_code = main(
+        [
+            "discover",
+            "--json",
+            "--download=none",
+            "--timezone=UTC",
+            "--cutoff-time=06:30",
+            "--category=cs.CL",
+            "--days=2",
+            "--max-results=25",
+        ]
+    )
     captured = capsys.readouterr()
     value = json.loads(captured.out)
     assert exit_code == 0
@@ -201,7 +217,37 @@ def test_doctor_reports_missing_data_and_optional_translation_without_paths(
     assert "GOOGLE_API_KEY" not in serialized
 
 
+def test_version_and_recent_activity_are_versioned_bounded_and_path_free(
+    tmp_path: Path,
+) -> None:
+    settings = load_settings(tmp_path)
+    save_papers(
+        settings.papers_path,
+        [stored_paper(short_id="2401.00001v1"), stored_paper(short_id="2401.00002v1")],
+    )
+    build = version()
+    recent = recent_activity(settings, limit=1)
+    serialized = json.dumps(recent)
+    assert build["data"]["version"] == "0.2.0"
+    assert set(build["data"]["build"]) == {"commit", "number", "dirty"}
+    assert recent["capability"] == "recent-activity"
+    assert recent["data"]["activityCount"] == 1
+    assert recent["data"]["activities"][0]["resourceId"].startswith("arxiv:")
+    assert str(tmp_path) not in serialized
+    assert "abstract" not in serialized.lower()
+
+
 def test_required_new_subcommands_are_present() -> None:
     help_text = build_parser().format_help()
-    for command in ("discover", "translate", "serve", "export", "doctor"):
+    commands = (
+        "discover",
+        "translate",
+        "serve",
+        "export",
+        "doctor",
+        "version",
+        "status",
+        "recent",
+    )
+    for command in commands:
         assert command in help_text

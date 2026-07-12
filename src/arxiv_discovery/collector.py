@@ -111,9 +111,7 @@ def collect_papers(
             base_id = re.sub(r"v\d+$", "", short_id, flags=re.I)
             should_download = download_mode == "all" or (
                 download_mode == "selected"
-                and bool(
-                    {short_id, base_id, f"arxiv:{base_id.lower()}"} & selected_ids
-                )
+                and bool({short_id, base_id, f"arxiv:{base_id.lower()}"} & selected_ids)
             )
             if should_download:
                 try:

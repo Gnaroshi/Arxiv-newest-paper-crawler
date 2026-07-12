@@ -9,6 +9,7 @@ from .config import Settings
 from .contracts import (
     Candidate,
     IntegrationEnvelope,
+    build_provenance,
     candidate_from_paper,
     candidate_id,
     emit_json,
@@ -49,20 +50,26 @@ def discover(
             "discover-papers",
             status="blocked",
             data={"downloadMode": download, "candidates": []},
-            errors=[{
-                "code": "download-mode-invalid",
-                "message": "Choose download mode none, selected, or all.",
-            }],
+            errors=[
+                {
+                    "code": "download-mode-invalid",
+                    "message": "Choose download mode none, selected, or all.",
+                }
+            ],
         )
     if download == "selected" and not selected_ids:
         return envelope(
             "discover-papers",
             status="blocked",
             data={"downloadMode": download, "candidates": []},
-            errors=[{
-                "code": "download-selection-required",
-                "message": "Selected download mode requires at least one candidate ID.",
-            }],
+            errors=[
+                {
+                    "code": "download-selection-required",
+                    "message": (
+                        "Selected download mode requires at least one candidate ID."
+                    ),
+                }
+            ],
         )
     papers = collector(
         settings,
@@ -136,20 +143,19 @@ def translate_selected(
             "export-candidates",
             status="blocked",
             data={"candidateCount": 0, "candidates": []},
-            errors=[{
-                "code": "translation-credential-unavailable",
-                "message": "Configure the translation provider before translating.",
-            }],
+            errors=[
+                {
+                    "code": "translation-credential-unavailable",
+                    "message": "Configure the translation provider before translating.",
+                }
+            ],
         )
     papers = load_papers(settings.papers_path)
     selected_papers, _candidates = _select_candidates(papers, selected_ids)
     translated = translate_papers(selected_papers, settings, diagnostic=diagnostic)
-    translated_by_id = {
-        candidate_id(paper["short_id"]): paper for paper in translated
-    }
+    translated_by_id = {candidate_id(paper["short_id"]): paper for paper in translated}
     merged = [
-        translated_by_id.get(candidate_id(paper["short_id"]), paper)
-        for paper in papers
+        translated_by_id.get(candidate_id(paper["short_id"]), paper) for paper in papers
     ]
     save_papers(settings.papers_path, merged)
     candidates = [candidate_from_paper(paper) for paper in translated]
@@ -176,12 +182,15 @@ def doctor(settings: Settings) -> IntegrationEnvelope:
         except DataCorruptionError:
             status = "blocked"
             data_state = "corrupt"
-            errors.append({
-                "code": "local-data-corrupt",
-                "message": (
-                    "Local paper data is unreadable; restore its backup before export."
-                ),
-            })
+            errors.append(
+                {
+                    "code": "local-data-corrupt",
+                    "message": (
+                        "Local paper data is unreadable; restore its backup "
+                        "before export."
+                    ),
+                }
+            )
     if not settings.google_api_key:
         warnings.append(
             "Translation is unavailable until its optional credential is configured."
@@ -198,6 +207,75 @@ def doctor(settings: Settings) -> IntegrationEnvelope:
         },
         warnings=warnings,
         errors=errors,
+    )
+
+
+def version() -> IntegrationEnvelope:
+    from . import __version__
+
+    return envelope(
+        "version",
+        data={
+            "version": __version__,
+            "contractVersion": 1,
+            "build": build_provenance(),
+        },
+    )
+
+
+def status(settings: Settings) -> IntegrationEnvelope:
+    result = doctor(settings)
+    result["capability"] = "status"
+    return result
+
+
+def recent_activity(settings: Settings, *, limit: int = 5) -> IntegrationEnvelope:
+    if not 1 <= limit <= 20:
+        return envelope(
+            "recent-activity",
+            status="blocked",
+            errors=[
+                {
+                    "code": "recent-limit-invalid",
+                    "message": "Recent limit must be between 1 and 20.",
+                }
+            ],
+        )
+    try:
+        papers = load_papers(settings.papers_path)
+    except DataCorruptionError:
+        return envelope(
+            "recent-activity",
+            status="blocked",
+            data={"activityCount": 0, "activities": []},
+            errors=[
+                {
+                    "code": "local-data-corrupt",
+                    "message": (
+                        "Restore local paper data before reading recent activity."
+                    ),
+                }
+            ],
+        )
+    activities = []
+    for candidate in sorted(
+        (candidate_from_paper(paper) for paper in papers),
+        key=lambda item: item["updatedAt"] or item["submittedAt"],
+        reverse=True,
+    )[:limit]:
+        activities.append(
+            {
+                "id": f"arxiv-crawler:{candidate['candidateId']}",
+                "type": "status",
+                "summary": candidate["title"][:240],
+                "occurredAt": candidate["updatedAt"] or candidate["submittedAt"],
+                "resourceId": candidate["candidateId"],
+                "actionable": True,
+            }
+        )
+    return envelope(
+        "recent-activity",
+        data={"activityCount": len(activities), "activities": activities},
     )
 
 

@@ -136,9 +136,7 @@ def test_storage_is_atomic_and_corruption_is_visible(tmp_path: Path) -> None:
 def test_existing_flask_routes_render_from_packaged_templates(tmp_path: Path) -> None:
     settings = load_settings(tmp_path)
     save_papers(settings.papers_path, [paper()])
-    settings.favorites_path.write_text(
-        json.dumps(["2401.00001v1"]), encoding="utf-8"
-    )
+    settings.favorites_path.write_text(json.dumps(["2401.00001v1"]), encoding="utf-8")
     client = create_app(settings).test_client()
     assert client.get("/").status_code == 200
     assert client.get("/all").status_code == 200
