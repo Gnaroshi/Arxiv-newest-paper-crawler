@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arxiv-discovery"
+version = "0.1.0"
+description = "Discover recent arXiv papers and review them through a local Flask application."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "arxiv>=2.2.0,<3.0.0",
+  "flask>=3.1.0,<4.0.0",
+]
+
+[project.optional-dependencies]
+translation = ["google-generativeai>=0.8.5,<0.9.0"]
+
+[project.scripts]
+arxiv-discovery = "arxiv_discovery.cli:main"
+
+[dependency-groups]
+dev = [
+  "build>=1.2.2,<2.0.0",
+  "pytest>=8.3.0,<9.0.0",
+  "ruff>=0.11.0,<0.12.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arxiv_discovery"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

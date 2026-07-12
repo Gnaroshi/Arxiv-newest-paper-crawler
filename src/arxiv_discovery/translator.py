@@ -1,0 +1,62 @@
+from __future__ import annotations
+
+import time
+
+from .config import Settings, load_settings
+from .models import StoredPaper
+
+
+def translate_papers(
+    papers: list[StoredPaper],
+    settings: Settings,
+) -> list[StoredPaper]:
+    if not papers:
+        print("Nothing to translate.")
+        return []
+    if not settings.google_api_key:
+        print("GOOGLE_API_KEY is not set; keeping English abstracts only.")
+        return [dict(paper) for paper in papers]
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=settings.google_api_key)
+        model = genai.GenerativeModel(settings.gemini_model)
+    except Exception as exc:
+        print(f"Translation provider is unavailable: {exc}")
+        return [dict(paper) for paper in papers]
+
+    translated: list[StoredPaper] = []
+    for paper in papers:
+        updated = dict(paper)
+        try:
+            response = model.generate_content(
+                "Translate this academic abstract into Korean. Return only the "
+                f"translation.\n\n{paper['abstract']}"
+            )
+            text = getattr(response, "text", "").strip()
+            if text:
+                updated["abstract_ko"] = text
+        except Exception as exc:
+            print(f"Failed to translate: {paper['title'][:30]}... - {exc}")
+        translated.append(updated)
+        time.sleep(settings.translation_delay_seconds)
+    return translated
+
+
+def process_papers_with_gemini(
+    papers_to_process: list[StoredPaper],
+) -> list[StoredPaper]:
+    """Compatibility function matching the legacy top-level module."""
+
+    return translate_papers(papers_to_process, load_settings(legacy=True))
+
+
+def save_papers_to_json(
+    papers_data: list[StoredPaper],
+    filename: str = "papers.json",
+) -> None:
+    from pathlib import Path
+
+    from .storage import save_papers
+
+    save_papers(Path(filename), papers_data)
