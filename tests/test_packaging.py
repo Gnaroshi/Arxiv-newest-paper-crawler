@@ -42,9 +42,13 @@ def test_new_and_legacy_runtime_locations_are_distinct(tmp_path: Path) -> None:
     assert modern.papers_path == tmp_path / "data" / "papers.json"
     assert modern.download_mode == "none"
     assert modern.flask_host == "127.0.0.1"
+    assert modern.timezone == "UTC"
+    assert modern.cutoff_time == "00:00"
     assert legacy.papers_path == tmp_path / "papers.json"
     assert legacy.download_mode == "all"
     assert legacy.translate is True
+    assert legacy.timezone == "Asia/Seoul"
+    assert legacy.cutoff_time == "07:00"
 
 
 def test_legacy_main_keeps_process_serve_and_all(monkeypatch, tmp_path: Path) -> None:

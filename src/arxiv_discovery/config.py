@@ -84,8 +84,8 @@ class Settings:
     papers_path: Path
     favorites_path: Path
     pdfs_dir: Path
-    timezone: str = "Asia/Seoul"
-    cutoff_time: str = "07:00"
+    timezone: str = "UTC"
+    cutoff_time: str = "00:00"
     categories: tuple[str, ...] = DEFAULT_CATEGORIES
     days: int = 1
     max_results: int = 200
@@ -161,8 +161,8 @@ def load_settings(
         papers_path=runtime_root / "papers.json",
         favorites_path=runtime_root / "favorites.json",
         pdfs_dir=runtime_root / "pdfs",
-        timezone=_env("TIMEZONE") or "Asia/Seoul",
-        cutoff_time=_env("CUTOFF_TIME") or "07:00",
+        timezone=_env("TIMEZONE") or ("Asia/Seoul" if legacy else "UTC"),
+        cutoff_time=_env("CUTOFF_TIME") or ("07:00" if legacy else "00:00"),
         categories=categories,
         days=days,
         max_results=maximum,

@@ -65,10 +65,11 @@ def collect_papers(
     download_pdfs: bool,
     results: Iterable[Any] | None = None,
     now: dt.datetime | None = None,
+    diagnostic=print,
 ) -> list[StoredPaper]:
     settings.ensure_runtime_directories(include_pdfs=download_pdfs)
     start, end = collection_window(settings, now=now)
-    print(
+    diagnostic(
         f"Collecting up to {settings.max_results} papers in "
         f"{','.join(settings.categories)} from {start.isoformat()} to {end.isoformat()}"
     )
@@ -97,11 +98,11 @@ def collect_papers(
             if download_pdfs:
                 try:
                     _download_pdf(result, settings, paper)
-                except Exception as exc:  # provider failure is per-paper
-                    print(f"Failed to download PDF: {result.title[:30]}... - {exc}")
+                except Exception:  # provider failure is per-paper
+                    diagnostic(f"Failed to download PDF: {result.title[:30]}...")
     except arxiv.UnexpectedEmptyPageError:
-        print("Reached the end of arXiv search results.")
-    print(f"Found {len(papers)} paper(s)")
+        diagnostic("Reached the end of arXiv search results.")
+    diagnostic(f"Found {len(papers)} paper(s)")
     return papers
 
 

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "arxiv-crawler",
+  "displayName": "Arxiv Crawler",
+  "repository": "Gnaroshi/Arxiv-newest-paper-crawler",
+  "version": "0.1.0",
+  "platforms": ["macos", "linux"],
+  "kind": "application",
+  "bundleId": "",
+  "dataOwner": "arxiv-crawler",
+  "capabilities": [
+    "discover-papers",
+    "export-candidates",
+    "send-to-paperflow",
+    "send-to-paper-lab",
+    "open-arxiv-paper"
+  ],
+  "entrypoints": {
+    "app": {},
+    "cli": {
+      "executable": "arxiv-discovery",
+      "versionSubcommand": ["doctor", "--json"],
+      "statusSubcommand": ["doctor", "--json"],
+      "healthSubcommand": ["doctor", "--json"]
+    },
+    "localHttp": {},
+    "deepLinks": []
+  },
+  "health": { "timeoutMs": 3000 },
+  "icon": { "kind": "system", "name": "scan-search" },
+  "privacy": {
+    "classification": "private-summary",
+    "credentials": "provider-owned",
+    "localPaths": "redacted"
+  },
+  "integration": {
+    "contractVersion": 1,
+    "minimumStudioVersion": "0.1.0",
+    "purpose": "Discover recent papers and preview selected candidates for handoff.",
+    "readOnly": true
+  }
+}

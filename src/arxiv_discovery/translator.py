@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 
 from .config import Settings, load_settings
 from .models import StoredPaper
@@ -9,20 +10,22 @@ from .models import StoredPaper
 def translate_papers(
     papers: list[StoredPaper],
     settings: Settings,
+    *,
+    diagnostic: Callable[[str], None] = print,
 ) -> list[StoredPaper]:
     if not papers:
-        print("Nothing to translate.")
+        diagnostic("Nothing to translate.")
         return []
     if not settings.google_api_key:
-        print("GOOGLE_API_KEY is not set; keeping English abstracts only.")
+        diagnostic("GOOGLE_API_KEY is not set; keeping English abstracts only.")
         return [dict(paper) for paper in papers]
     try:
         import google.generativeai as genai
 
         genai.configure(api_key=settings.google_api_key)
         model = genai.GenerativeModel(settings.gemini_model)
-    except Exception as exc:
-        print(f"Translation provider is unavailable: {exc}")
+    except Exception:
+        diagnostic("Translation provider is unavailable.")
         return [dict(paper) for paper in papers]
 
     translated: list[StoredPaper] = []
@@ -36,8 +39,8 @@ def translate_papers(
             text = getattr(response, "text", "").strip()
             if text:
                 updated["abstract_ko"] = text
-        except Exception as exc:
-            print(f"Failed to translate: {paper['title'][:30]}... - {exc}")
+        except Exception:
+            diagnostic(f"Failed to translate: {paper['title'][:30]}...")
         translated.append(updated)
         time.sleep(settings.translation_delay_seconds)
     return translated
