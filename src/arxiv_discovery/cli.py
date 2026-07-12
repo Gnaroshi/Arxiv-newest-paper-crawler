@@ -26,7 +26,14 @@ def build_parser() -> argparse.ArgumentParser:
         "discover", help="Discover candidates without writing local data"
     )
     _add_discovery_options(discover_command)
-    discover_command.add_argument("--download", choices=["none"], default="none")
+    discover_command.add_argument(
+        "--download", choices=["none", "selected", "all"], default="none"
+    )
+    discover_command.add_argument(
+        "--select",
+        action="append",
+        help="Candidate or arXiv ID to download when --download=selected",
+    )
     discover_command.add_argument("--json", action="store_true")
 
     translate = subcommands.add_parser(
@@ -96,7 +103,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.command == "discover":
         try:
             return emit_result(
-                discover(settings, download=args.download),
+                discover(
+                    settings,
+                    download=args.download,
+                    selected_ids=args.select,
+                ),
                 json_mode=args.json,
             )
         except Exception:

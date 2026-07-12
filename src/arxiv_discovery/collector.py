@@ -49,25 +49,37 @@ def _paper_from_result(result: Any, crawled_at: str) -> StoredPaper:
     }
 
 
-def _download_pdf(result: Any, settings: Settings, paper: StoredPaper) -> None:
+def _download_pdf(
+    result: Any,
+    settings: Settings,
+    paper: StoredPaper,
+    diagnostic,
+) -> None:
     primary_subject = result.categories[0] if result.categories else "Uncategorized"
     subject_dir = settings.pdfs_dir / primary_subject
     subject_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{sanitize_filename(result.title)}.pdf"
     result.download_pdf(dirpath=str(subject_dir), filename=filename)
     paper["local_pdf_path"] = str(Path(primary_subject) / filename)
-    print(f"Downloaded PDF: {subject_dir / filename}")
+    diagnostic(f"Downloaded PDF: {subject_dir / filename}")
 
 
 def collect_papers(
     settings: Settings,
     *,
-    download_pdfs: bool,
+    download_mode: str,
+    selected_ids: set[str] | None = None,
     results: Iterable[Any] | None = None,
     now: dt.datetime | None = None,
     diagnostic=print,
 ) -> list[StoredPaper]:
-    settings.ensure_runtime_directories(include_pdfs=download_pdfs)
+    if download_mode not in {"none", "selected", "all"}:
+        raise ValueError("Unsupported download mode")
+    selected_ids = selected_ids or set()
+    if download_mode == "selected" and not selected_ids:
+        raise ValueError("Selected download mode requires candidate IDs")
+    if download_mode != "none":
+        settings.ensure_runtime_directories(include_pdfs=True)
     start, end = collection_window(settings, now=now)
     diagnostic(
         f"Collecting up to {settings.max_results} papers in "
@@ -95,9 +107,17 @@ def collect_papers(
                 continue
             paper = _paper_from_result(result, crawled_at)
             papers.append(paper)
-            if download_pdfs:
+            short_id = paper["short_id"]
+            base_id = re.sub(r"v\d+$", "", short_id, flags=re.I)
+            should_download = download_mode == "all" or (
+                download_mode == "selected"
+                and bool(
+                    {short_id, base_id, f"arxiv:{base_id.lower()}"} & selected_ids
+                )
+            )
+            if should_download:
                 try:
-                    _download_pdf(result, settings, paper)
+                    _download_pdf(result, settings, paper, diagnostic)
                 except Exception:  # provider failure is per-paper
                     diagnostic(f"Failed to download PDF: {result.title[:30]}...")
     except arxiv.UnexpectedEmptyPageError:
@@ -111,4 +131,4 @@ def collect_new_papers() -> list[StoredPaper]:
 
     from .config import load_settings
 
-    return collect_papers(load_settings(legacy=True), download_pdfs=True)
+    return collect_papers(load_settings(legacy=True), download_mode="all")

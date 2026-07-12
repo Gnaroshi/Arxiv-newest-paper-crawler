@@ -47,7 +47,7 @@ class LegacyBaselineTests(unittest.TestCase):
         self.assertIn('runtime_root / "favorites.json"', config_source)
         self.assertIn('@app.route("/")', web_source)
         self.assertIn('@app.route("/all")', web_source)
-        self.assertIn("download_pdfs=True", legacy_source)
+        self.assertIn('download_mode="all"', legacy_source)
         self.assertEqual(FIXTURE["runtimeFiles"]["pdfDirectory"], "pdfs")
 
     def test_generated_and_local_only_paths_are_ignored(self) -> None:

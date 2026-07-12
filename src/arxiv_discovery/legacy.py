@@ -35,7 +35,7 @@ def run_processing_workflow(settings: Settings | None = None) -> None:
         "Legacy process mode: downloading every matching PDF and attempting "
         "translation before writing papers.json."
     )
-    papers = collect_papers(resolved, download_pdfs=True)
+    papers = collect_papers(resolved, download_mode="all")
     translated = translate_papers(papers, resolved)
     save_papers(resolved.papers_path, translated)
 

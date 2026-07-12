@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 from arxiv_discovery.cli import build_parser, main
+from arxiv_discovery.collector import collect_papers
 from arxiv_discovery.config import load_settings
 from arxiv_discovery.contracts import candidate_from_paper, candidate_id, envelope
 from arxiv_discovery.provider import discover, doctor, export_candidates
@@ -57,8 +60,8 @@ def test_discovery_defaults_to_no_download_and_does_not_translate(
     settings = load_settings(tmp_path)
     calls = []
 
-    def collector(_settings, *, download_pdfs, diagnostic):
-        calls.append(download_pdfs)
+    def collector(_settings, *, download_mode, selected_ids, diagnostic):
+        calls.append((download_mode, selected_ids))
         diagnostic("fixture diagnostic")
         return [stored_paper()]
 
@@ -67,10 +70,61 @@ def test_discovery_defaults_to_no_download_and_does_not_translate(
     assert result["status"] == "ok"
     assert result["data"]["downloadMode"] == "none"
     assert result["data"]["candidateCount"] == 1
-    assert calls == [False]
+    assert calls == [("none", set())]
     assert diagnostics == ["fixture diagnostic"]
     assert not settings.papers_path.exists()
     assert not settings.pdfs_dir.exists()
+    assert not settings.data_dir.exists()
+
+
+def test_selected_and_all_download_modes_are_explicit(tmp_path: Path) -> None:
+    settings = load_settings(tmp_path).with_overrides(
+        timezone="UTC", cutoff_time="00:00", days=2
+    )
+    downloads: list[str] = []
+
+    def result(identifier: str):
+        return SimpleNamespace(
+            entry_id=f"https://arxiv.org/abs/{identifier}",
+            get_short_id=lambda: identifier,
+            title=f"Fixture {identifier}",
+            authors=[SimpleNamespace(name="Ada Example")],
+            categories=["cs.AI"],
+            summary="Fixture abstract",
+            pdf_url=f"https://arxiv.org/pdf/{identifier}",
+            published=datetime(2026, 7, 11, 12, 0, tzinfo=timezone.utc),
+            updated=datetime(2026, 7, 11, 12, 0, tzinfo=timezone.utc),
+            download_pdf=lambda **_kwargs: downloads.append(identifier),
+        )
+
+    selected = collect_papers(
+        settings,
+        download_mode="selected",
+        selected_ids={"arxiv:2401.00002"},
+        results=[result("2401.00001v1"), result("2401.00002v2")],
+        now=datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc),
+        diagnostic=lambda _message: None,
+    )
+    assert downloads == ["2401.00002v2"]
+    assert "local_pdf_path" not in selected[0]
+    assert selected[1]["local_pdf_path"].endswith("Fixture 2401.00002v2.pdf")
+
+    downloads.clear()
+    all_papers = collect_papers(
+        settings,
+        download_mode="all",
+        results=[result("2401.00001v1"), result("2401.00002v2")],
+        now=datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc),
+        diagnostic=lambda _message: None,
+    )
+    assert downloads == ["2401.00001v1", "2401.00002v2"]
+    assert all("local_pdf_path" in paper for paper in all_papers)
+
+
+def test_selected_download_requires_an_explicit_selection(tmp_path: Path) -> None:
+    result = discover(load_settings(tmp_path), download="selected")
+    assert result["status"] == "blocked"
+    assert result["errors"][0]["code"] == "download-selection-required"
 
 
 def test_cli_json_is_one_stdout_value_and_configuration_is_typed(
@@ -78,7 +132,7 @@ def test_cli_json_is_one_stdout_value_and_configuration_is_typed(
 ) -> None:
     monkeypatch.setattr(
         "arxiv_discovery.cli.discover",
-        lambda settings, download: envelope(
+        lambda settings, download, selected_ids: envelope(
             "discover-papers",
             data={
                 "candidateCount": 0,

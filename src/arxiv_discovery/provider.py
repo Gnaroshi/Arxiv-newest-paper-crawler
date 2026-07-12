@@ -40,32 +40,44 @@ def discover(
     settings: Settings,
     *,
     download: str = "none",
+    selected_ids: Sequence[str] | None = None,
     collector=collect_papers,
     diagnostic: Diagnostic = stderr,
 ) -> IntegrationEnvelope:
-    if download != "none":
+    if download not in {"none", "selected", "all"}:
         return envelope(
             "discover-papers",
             status="blocked",
             data={"downloadMode": download, "candidates": []},
             errors=[{
-                "code": "download-mode-not-yet-enabled",
-                "message": (
-                    "This provider version supports discovery with "
-                    "download=none only."
-                ),
+                "code": "download-mode-invalid",
+                "message": "Choose download mode none, selected, or all.",
+            }],
+        )
+    if download == "selected" and not selected_ids:
+        return envelope(
+            "discover-papers",
+            status="blocked",
+            data={"downloadMode": download, "candidates": []},
+            errors=[{
+                "code": "download-selection-required",
+                "message": "Selected download mode requires at least one candidate ID.",
             }],
         )
     papers = collector(
         settings,
-        download_pdfs=False,
+        download_mode=download,
+        selected_ids=set(selected_ids or []),
         diagnostic=diagnostic,
     )
     candidates = [candidate_from_paper(paper) for paper in papers]
     return envelope(
         "discover-papers",
         data={
-            "downloadMode": "none",
+            "downloadMode": download,
+            "downloadedCount": sum(
+                1 for candidate in candidates if "downloadedLocalPath" in candidate
+            ),
             "configuration": configuration_data(settings),
             "candidateCount": len(candidates),
             "candidates": candidates,

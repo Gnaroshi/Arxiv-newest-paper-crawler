@@ -115,7 +115,7 @@ def test_collector_does_not_download_when_disabled(tmp_path: Path) -> None:
     )
     papers = collect_papers(
         settings,
-        download_pdfs=False,
+        download_mode="none",
         results=[result],
         now=datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc),
     )
