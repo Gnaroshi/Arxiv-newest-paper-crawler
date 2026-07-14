@@ -1,0 +1,36 @@
+name: Release provider
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Verify version and clean tag
+        run: |
+          VERSION="$(uv run python -c 'from arxiv_discovery import __version__; print(__version__)')"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+          test -z "$(git status --porcelain)"
+      - name: Test and build
+        run: |
+          uv sync --dev
+          uv run pytest
+          uv run ruff check .
+          uv build
+      - name: Publish manifest and checksums
+        run: |
+          cp gnaroshi.app.json dist/gnaroshi.app.json
+          (cd dist && sha256sum * > SHA256SUMS)
+          gh release create "${GITHUB_REF_NAME}" dist/* --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}

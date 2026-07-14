@@ -48,4 +48,9 @@ Desktop.ini
 /papers.json
 /pdfs/*
 !/pdfs/.gitkeep
+/data/papers.json
+/data/favorites.json
+/data/pdfs/*
+/data/*.bak
+/data/*.tmp
 /robot/
