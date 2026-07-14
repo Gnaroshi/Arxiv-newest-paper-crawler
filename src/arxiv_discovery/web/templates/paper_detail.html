@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+{% block content %}
+<p><a href="{{ url_for('all_papers') }}">← Back to candidates</a></p>
+<article>
+  <header><small>Reviewed metadata · no-download mode</small><h1>{{ paper.title }}</h1><p>{{ paper.authors|join(', ') }}</p></header>
+  <h2>Candidate summary</h2><p>{{ paper.abstract }}</p>
+  <div class="workflow-actions"><a href="{{ url_for('handoff_preview', short_id=paper.short_id) }}" role="button">Preview PaperFlow handoff</a>{% if showcase %}<button disabled>PDF download disabled</button>{% elif paper.pdf_url %}<a href="{{ paper.pdf_url }}" role="button" class="secondary">Open PDF</a>{% endif %}</div>
+</article>
+{% endblock %}
