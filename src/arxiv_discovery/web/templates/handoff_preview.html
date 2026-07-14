@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block content %}
+<p><a href="{{ url_for('paper_detail', short_id=paper.short_id) }}">← Back to candidate</a></p>
+<article>
+  <header><small>Read-only boundary</small><h1>PaperFlow handoff preview</h1><p>{{ paper.title }}</p></header>
+  <dl><dt>Record ID</dt><dd>{{ paper.short_id }}</dd><dt>Payload</dt><dd>Public title, authors, subjects, and abstract only</dd><dt>PDF</dt><dd>Not included</dd><dt>Destination</dt><dd>PaperFlow import preview</dd></dl>
+  <p><strong>No change has been written.</strong> Continue only from PaperFlow after explicit review.</p>
+  <button disabled>Handoff preview only</button>
+</article>
+{% endblock %}

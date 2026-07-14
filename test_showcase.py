@@ -1,6 +1,6 @@
 import unittest
 
-from webapp import app, showcase_enabled
+from webapp import showcase_enabled
 
 
 class ShowcaseBoundaryTests(unittest.TestCase):
