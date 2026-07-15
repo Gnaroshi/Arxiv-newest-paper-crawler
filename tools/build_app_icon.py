@@ -60,9 +60,16 @@ def main() -> None:
         json.dumps(
             {
                 "schemaVersion": 1,
+                "id": "arxiv-discovery-v1",
                 "source": "arxiv-discovery-v1.png",
+                "sourceCandidate": "app-family-p5-arxiv-discovery",
                 "sourceSha256": EXPECTED_SOURCE_SHA256,
                 "sourceSize": [2048, 2048],
+                "ownerApproved": True,
+                "targetPlatforms": [
+                    "native macOS application",
+                    "Gnaroshi Studio managed-app card",
+                ],
                 "resampling": "nearest-neighbor",
                 "icnsSha256": sha256(OUTPUT),
             },

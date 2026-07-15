@@ -4,9 +4,15 @@
   "source": "arxiv-discovery-v1.png",
   "sourceCandidate": "app-family-p5-arxiv-discovery",
   "sourceSha256": "17a1678d5b6ffbbd6592c598664c5889777533d378354b4ff5672efacaa81ad7",
-  "sourceSize": [2048, 2048],
+  "sourceSize": [
+    2048,
+    2048
+  ],
   "ownerApproved": true,
-  "targetPlatforms": ["native macOS application", "Gnaroshi Studio managed-app card"],
+  "targetPlatforms": [
+    "native macOS application",
+    "Gnaroshi Studio managed-app card"
+  ],
   "resampling": "nearest-neighbor",
   "icnsSha256": "b423e3c76f3b8119e127fa02f92627030da89d83e7623b1cc9d2b7c5e75eed4c"
 }
