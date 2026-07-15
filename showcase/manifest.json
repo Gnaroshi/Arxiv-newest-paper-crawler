@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "applicationId": "arxiv-discovery",
   "applicationVersion": "0.3.0",
-  "sourceCommit": "88c033dd9b25eec80fabce6a2a591725654d6b9f",
+  "sourceCommit": "1f87f235e2bef334980c19e019c016bb2a60ef0c",
   "scenarioId": "native-no-download-discovery",
   "usesDemoData": true,
   "captureDate": "2026-07-15",
