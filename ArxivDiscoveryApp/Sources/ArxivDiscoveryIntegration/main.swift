@@ -3,7 +3,7 @@ import Foundation
 
 private let currentProvider = StatusEnvelope.Provider(
     id: "arxiv-discovery",
-    version: "0.3.0"
+    version: "0.4.0"
 )
 
 private struct StatusEnvelope: Encodable {
@@ -82,7 +82,7 @@ private func envelope(status snapshot: IntegrationSnapshot?, now: Date) -> Statu
     )
 }
 
-private func emit(_ value: StatusEnvelope) -> Never {
+private func emit<T: Encodable>(_ value: T) -> Never {
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     encoder.dateEncodingStrategy = .iso8601
@@ -96,6 +96,16 @@ private func emit(_ value: StatusEnvelope) -> Never {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
+if arguments == ["backup", "--json"] {
+    do {
+        let snapshot = try PaperRepository().makeBackupSnapshot(applicationVersion: currentProvider.version)
+        emit(snapshot)
+    } catch {
+        FileHandle.standardError.write(Data("The local backup snapshot could not be created.\n".utf8))
+        exit(EXIT_FAILURE)
+    }
+}
+
 guard arguments == ["status", "--json"] else {
     emit(
         StatusEnvelope(
@@ -106,7 +116,7 @@ guard arguments == ["status", "--json"] else {
             status: "incompatible",
             data: .init(paperCount: 0, favoriteCount: 0, lastRefresh: nil, nextAction: "Use the fixed status --json command."),
             warnings: [],
-            errors: [.init(code: "unsupported_command", message: "Only status --json is supported.")]
+            errors: [.init(code: "unsupported_command", message: "Only status --json and backup --json are supported.")]
         )
     )
 }

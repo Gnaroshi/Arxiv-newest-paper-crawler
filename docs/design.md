@@ -6,7 +6,7 @@ The main window answers five questions without opening another screen: what the 
 
 ## Layout
 
-- Sidebar: mutually exclusive All, Saved, and observed subject filters.
+- Sidebar: Calendar, Inbox, New, Saved, Reviewed, All, collections, VLA/World Models, and observed subject filters.
 - Candidate column: status, bounded time-window control, search, and paper rows.
 - Detail column: one selected paper with metadata, abstract, and explicit actions.
 - Settings: Gemini key and model information separated from data-folder commands.
@@ -25,5 +25,5 @@ The minimum window is 900×620. Text wraps before controls compress. The candida
 
 - Every icon-only button has an accessibility label and help text.
 - Status has text in addition to color and icon.
-- Keyboard selection, search, refresh, open, save, translate, and PDF actions remain available.
+- Keyboard selection, search, multi-date discovery, review, save, collection, note, translate, and PDF actions remain available.
 - Reduced motion changes no meaning because the interface uses no required animation.

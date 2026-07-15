@@ -33,14 +33,14 @@ struct ArxivDiscoveryApplication: App {
         .defaultSize(width: 1180, height: 760)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Find Recent Papers") { model.discover() }
+                Button("Search Selected Dates") { model.searchSelectedDates() }
                     .keyboardShortcut("r", modifiers: [.command])
                     .disabled(model.isDiscovering || ShowcaseMode.isEnabled)
             }
         }
 
         Settings {
-            SettingsView(settings: settings, repositoryRoot: model.repository.rootURL)
+            SettingsView(settings: settings, model: model, repositoryRoot: model.repository.rootURL)
         }
     }
 }

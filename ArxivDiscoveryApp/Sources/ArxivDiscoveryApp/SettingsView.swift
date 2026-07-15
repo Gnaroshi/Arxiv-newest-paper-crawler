@@ -1,8 +1,10 @@
 import AppKit
+import ArxivDiscoveryCore
 import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
+    @ObservedObject var model: AppViewModel
     let repositoryRoot: URL
     @State private var apiKey = ""
     @State private var hasStoredKey = false
@@ -20,7 +22,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("Discovery categories") {
+            Section("Subjects") {
                 ForEach(AppSettings.categories, id: \.self) { category in
                     Toggle(category, isOn: Binding(
                         get: { settings.enabledCategories.contains(category) },
@@ -30,28 +32,51 @@ struct SettingsView: View {
                         }
                     ))
                 }
-                Text("At least one category stays enabled. Changes apply to the next discovery request.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
 
-            Section("Optional Korean translation") {
-                SecureField(hasStoredKey ? "Stored in Keychain — enter to replace" : "Gemini API key", text: $apiKey)
+            Section("Korean translation") {
+                SecureField(hasStoredKey ? "API key stored — enter to replace" : "Gemini API key", text: $apiKey)
                     .textFieldStyle(.roundedBorder)
-                LabeledContent("Model", value: settings.geminiModel)
-                Text("Only the selected public title and abstract are sent after you press Translate. The key stays in Keychain.")
+                HStack {
+                    Button("Save key") { saveKey() }
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button("Remove", role: .destructive) { removeKey() }
+                        .disabled(!hasStoredKey)
+                    Spacer()
+                    Button { model.refreshGeminiModels() } label: {
+                        if model.isLoadingModels { ProgressView().controlSize(.small) }
+                        else { Label("Refresh models", systemImage: "arrow.clockwise") }
+                    }
+                    .disabled(!hasStoredKey || model.isLoadingModels)
+                }
+
+                if model.availableGeminiModels.isEmpty {
+                    LabeledContent("Model", value: settings.geminiModel)
+                } else {
+                    Picker("Model", selection: $settings.geminiModel) {
+                        ForEach(model.availableGeminiModels) { geminiModel in
+                            Text(geminiModel.displayName).tag(geminiModel.modelID)
+                        }
+                    }
+                }
+                Text("Model availability comes from the saved key. Only this app's request and token totals are tracked locally.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                HStack {
-                    Button("Save to Keychain") { saveKey() }
-                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    Button("Remove key", role: .destructive) { removeKey() }
-                        .disabled(!hasStoredKey)
-                }
             }
 
-            Section("Local data") {
-                Text("Papers, favorites, status, and downloaded PDFs remain in the app-owned Application Support directory.")
+            Section("PDF downloads") {
+                Picker("Filename", selection: $settings.pdfNameStyle) {
+                    Text("Original paper title").tag(PDFNameStyle.title)
+                    Text("arXiv ID").tag(PDFNameStyle.arxivID)
+                }
+                Text("Titles are automatically made safe for macOS filenames.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Local storage") {
+                Stepper("Keep ordinary papers for \(settings.cacheRetentionDays) days", value: $settings.cacheRetentionDays, in: 30...365, step: 30)
+                Text("Saved papers, collections, notes, and translations are always kept.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("Open data folder") {
@@ -66,9 +91,12 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding(16)
-        .frame(width: 520, height: 620)
+        .frame(width: 560, height: 760)
         .preferredColorScheme(settings.appearance.colorScheme)
-        .onAppear { refreshKeyState() }
+        .onAppear {
+            refreshKeyState()
+            if hasStoredKey && model.availableGeminiModels.isEmpty { model.refreshGeminiModels() }
+        }
     }
 
     private func refreshKeyState() {
@@ -80,7 +108,8 @@ struct SettingsView: View {
             try keychain.save(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))
             apiKey = ""
             hasStoredKey = true
-            message = "Gemini key saved to Keychain."
+            message = "API key saved to Keychain."
+            model.geminiKeyDidChange()
         } catch {
             message = "The key could not be saved. \(error.localizedDescription)"
         }
@@ -91,7 +120,8 @@ struct SettingsView: View {
             try keychain.remove()
             apiKey = ""
             hasStoredKey = false
-            message = "Gemini key removed."
+            message = "API key removed."
+            model.geminiKeyDidChange()
         } catch {
             message = "The key could not be removed. \(error.localizedDescription)"
         }

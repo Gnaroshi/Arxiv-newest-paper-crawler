@@ -93,6 +93,82 @@ func checkLegacyImport() throws {
     try require(try Data(contentsOf: source) == original, "Legacy source should not be modified.")
 }
 
+func checkLibraryWorkflow() throws {
+    var state = LibraryState()
+    state.markViewed("paper-a", at: Date(timeIntervalSince1970: 100))
+    try require(state.progress(for: "paper-a").firstViewedAt != nil, "Opening an abstract should record first view.")
+    state.markReviewed("paper-a", at: Date(timeIntervalSince1970: 200))
+    try require(state.progress(for: "paper-a").disposition == .reviewed, "Reviewed papers should leave Inbox.")
+    state.setSaved(true, paperID: "paper-a", at: Date(timeIntervalSince1970: 300))
+    let collection = try requireValue(state.createCollection(named: "World Models"), "Collection should be created.")
+    state.setCollection(collection.id, contains: "paper-a", enabled: true)
+    state.setNote("Compare the ablation.", paperID: "paper-a")
+    try require(state.savedPaperIDs == ["paper-a"], "Saved IDs should be derived from library state.")
+    try require(state.progress(for: "paper-a").collectionIDs == [collection.id], "A paper should belong to a collection.")
+    try require(state.progress(for: "paper-a").note == "Compare the ablation.", "Notes should persist in progress state.")
+}
+
+func checkDiscoveryHistory() throws {
+    var history = DiscoveryHistory()
+    history.record(.init(
+        day: "2026-07-15",
+        lastSearchedAt: Date(timeIntervalSince1970: 100),
+        paperCount: 174,
+        categories: ["cs.AI", "cs.RO"],
+        isComplete: true
+    ))
+    try require(history.days["2026-07-15"]?.covers(categories: ["cs.AI", "cs.RO"]) == true, "History should track the exact searched subject set.")
+    try require(history.days["2026-07-15"]?.covers(categories: ["cs.AI"]) == false, "Changed subjects should require a new search.")
+    try require(DiscoveryDate.interval(for: "2026-07-15")?.duration == 86_400, "A discovery day should be a bounded UTC interval.")
+}
+
+func checkFilenameAndCache() throws {
+    let safe = PaperRepository.safeFilenameStem("  Vision/Language: Action.  ", fallback: "paper")
+    try require(safe == "Vision Language Action", "PDF titles should be safe macOS filename stems.")
+    let long = String(repeating: "가", count: 200)
+    try require(PaperRepository.safeFilenameStem(long, fallback: "paper").lengthOfBytes(using: .utf8) <= 220, "PDF filename stems should stay within the byte budget.")
+
+    let now = Date()
+    let oldPaper = Paper(
+        entryID: "https://arxiv.org/abs/old.1",
+        shortID: "old.1",
+        title: "Old",
+        authors: [],
+        subjects: ["cs.AI"],
+        abstract: "Old abstract",
+        pdfURL: "https://arxiv.org/pdf/old.1.pdf",
+        publishedAt: now.addingTimeInterval(-400 * 86_400),
+        crawledAt: now.addingTimeInterval(-30 * 86_400)
+    )
+    var library = LibraryState()
+    library.setNote("Keep", paperID: oldPaper.shortID)
+    let repository = PaperRepository(rootURL: try temporaryDirectory())
+    try require(repository.prunedPapers([oldPaper], library: library, retentionDays: 60, now: now).count == 1, "Notes should protect a paper from cache pruning.")
+    try require(repository.prunedPapers([oldPaper], library: LibraryState(), retentionDays: 60, now: now).isEmpty, "Unowned expired papers should be pruned.")
+}
+
+func checkBackupSnapshot() throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let repository = PaperRepository(rootURL: root)
+    try repository.savePapers([paper(abstract: "Backup", translation: "백업")])
+    var library = LibraryState()
+    library.setSaved(true, paperID: "2607.12345")
+    library.setNote("Private note", paperID: "2607.12345")
+    try repository.saveLibraryState(library)
+    let snapshot = try repository.makeBackupSnapshot(applicationVersion: "0.4.0")
+    try require(snapshot.schemaVersion == 1, "Backup snapshots should be versioned.")
+    try require(snapshot.library.progress(for: "2607.12345").note == "Private note", "Backup should preserve the private library state.")
+    let encoded = try repository.encodedBackupSnapshot(applicationVersion: "0.4.0")
+    let text = String(decoding: encoded, as: UTF8.self)
+    try require(!text.contains("gemini-api-key") && !text.contains("/PDFs/"), "Backup should omit credentials and PDF paths.")
+}
+
+func requireValue<T>(_ value: T?, _ message: String) throws -> T {
+    guard let value else { throw CheckFailure.failed(message) }
+    return value
+}
+
 private extension JSONEncoder {
     static var compatible: JSONEncoder {
         let encoder = JSONEncoder()
@@ -105,7 +181,11 @@ do {
     try checkFeedParser()
     try checkMerge()
     try checkLegacyImport()
-    print("ArxivDiscoveryCoreChecks passed (3 checks).")
+    try checkLibraryWorkflow()
+    try checkDiscoveryHistory()
+    try checkFilenameAndCache()
+    try checkBackupSnapshot()
+    print("ArxivDiscoveryCoreChecks passed (7 checks).")
 } catch {
     FileHandle.standardError.write(Data("ArxivDiscoveryCoreChecks failed: \(error)\n".utf8))
     exit(EXIT_FAILURE)

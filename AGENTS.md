@@ -12,7 +12,7 @@
 - Native application data lives under the stable bundle-owned Application Support directory for `dev.gnaroshi.ArxivDiscovery`.
 - Preserve compatibility with the existing `papers.json` and `favorites.json` arrays through explicit import. Do not mutate a selected legacy checkout.
 - Store Gemini credentials only in Keychain. Never write keys into settings files, manifests, logs, screenshots, or repository content.
-- Studio integration is read-only first and uses the bundled fixed integration executable plus `gnaroshi.app.json`.
+- Studio status integration remains read-only. The separately declared `backup-export` capability may emit a user-authorized private snapshot through the bundled fixed integration executable; it must exclude credentials, Keychain data, PDFs, and local paths.
 
 ## Interface and identity
 

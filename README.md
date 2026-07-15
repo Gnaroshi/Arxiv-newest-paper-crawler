@@ -6,12 +6,12 @@ The SwiftUI app is the primary interface. Python remains available for compatibi
 
 ## What works
 
-- Native arXiv discovery with 1, 3, or 7 day windows
-- All, saved, subject, and text filters
-- Persistent local paper and favorite JSON
+- Multi-date UTC discovery calendar with paper counts and searched/unsearched state
+- Inbox, New, Reviewed, Saved, collection, VLA, World Models, subject, and text filters
+- Persistent collections, per-paper notes, translations, and discovery history
 - Explicit per-paper PDF download
-- Optional per-paper Korean translation with a Keychain-stored Gemini key
-- Read-only Studio status helper and versioned application manifest
+- Optional per-paper Korean translation with a Keychain-stored Gemini key, selectable compatible model, and app-local token totals
+- Private Studio backup export plus read-only status helper
 - Import of the previous `papers.json` and sibling `favorites.json`
 - Safe schema-v1 candidate discovery and export from the Python provider
 - Signed local app packaging and stable installation under `/Applications`
@@ -42,6 +42,9 @@ The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
 
 - `papers.json`: public arXiv metadata and optional Korean abstracts
 - `favorites.json`: saved arXiv IDs
+- `library.json`: Inbox/Reviewed/Saved state, collections, and notes
+- `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
+- `translation-usage.json`: app-local Gemini request and token totals
 - `status.json`: safe count and freshness summary for read-only integration
 - `PDFs/`: PDFs downloaded by explicit action
 
@@ -49,7 +52,7 @@ Use the app Import command to merge an older `data/papers.json`. When a sibling 
 
 ## Optional Gemini translation
 
-Open Settings, enter a Gemini API key, and save it to Keychain. Translation sends only the selected public paper title and abstract. The default stable model is `gemini-3.5-flash`.
+Open Settings, enter a Gemini API key, and save it to Keychain. The app loads models available to that key and shows only models supporting `generateContent`. Translation sends only the selected public paper title and abstract. Gemini response token metadata is accumulated locally; account-wide billing or quota usage is not claimed.
 
 The compatibility CLIs accept `GEMINI_API_KEY`; the app does not read `.env`.
 
@@ -87,7 +90,7 @@ Studio uses the fixed executable bundled with the app:
 "/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryIntegration" status --json
 ```
 
-It emits counts and freshness only. It never emits titles, abstracts, credentials, PDF paths, or another application's data. The general Python provider is not used as an implicit Studio command surface.
+`status --json` emits counts and freshness only. The separately declared `backup --json` command emits a versioned private snapshot for Gnaroshi Studio. It includes the app's paper library and review state but never API keys, Keychain data, PDFs, downloaded-file paths, or another application's data. The general Python provider is not used as an implicit Studio command surface.
 
 ## Development checks
 

@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="arxiv-discovery",
         description="Safe local arXiv paper discovery provider.",
     )
-    parser.add_argument("--version", action="version", version="%(prog)s 0.3.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.4.0")
     subcommands = parser.add_subparsers(dest="command", required=True)
     discover_command = subcommands.add_parser(
         "discover", help="Discover candidates without writing local data"

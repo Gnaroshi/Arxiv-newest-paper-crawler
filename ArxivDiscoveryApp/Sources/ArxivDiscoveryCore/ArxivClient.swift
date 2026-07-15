@@ -48,8 +48,12 @@ public struct ArxivClient: ArxivSearching {
             throw ArxivClientError.invalidRequest
         }
         let categoryQuery = query.categories.map { "cat:\($0)" }.joined(separator: " OR ")
+        let rangeStart = Self.queryDateFormatter.string(from: query.interval.start)
+        let inclusiveEnd = query.interval.end.addingTimeInterval(-60)
+        let rangeEnd = Self.queryDateFormatter.string(from: inclusiveEnd)
+        let searchQuery = "(\(categoryQuery)) AND submittedDate:[\(rangeStart) TO \(rangeEnd)]"
         components.queryItems = [
-            URLQueryItem(name: "search_query", value: categoryQuery),
+            URLQueryItem(name: "search_query", value: searchQuery),
             URLQueryItem(name: "start", value: "0"),
             URLQueryItem(name: "max_results", value: String(query.maxResults)),
             URLQueryItem(name: "sortBy", value: "submittedDate"),
@@ -59,7 +63,7 @@ public struct ArxivClient: ArxivSearching {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        request.setValue("ArxivDiscovery/0.3.0 (https://github.com/Gnaroshi/Arxiv-newest-paper-crawler)", forHTTPHeaderField: "User-Agent")
+        request.setValue("ArxivDiscovery/0.4.0 (https://github.com/Gnaroshi/Arxiv-newest-paper-crawler)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/atom+xml", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
@@ -74,15 +78,19 @@ public struct ArxivClient: ArxivSearching {
         }
 
         let papers = try ArxivFeedParser.parse(data: data, crawledAt: now)
-        let cutoff = Calendar(identifier: .gregorian).date(
-            byAdding: .day,
-            value: -query.days,
-            to: now
-        ) ?? now.addingTimeInterval(TimeInterval(-query.days * 86_400))
         return papers
-            .filter { $0.publishedAt >= cutoff && $0.publishedAt <= now }
+            .filter { $0.publishedAt >= query.interval.start && $0.publishedAt < query.interval.end }
             .sorted { $0.publishedAt > $1.publishedAt }
     }
+
+    private static let queryDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.calendar = DiscoveryDate.calendar
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "yyyyMMddHHmm"
+        return formatter
+    }()
 }
 
 public enum ArxivFeedParser {

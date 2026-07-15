@@ -5,11 +5,17 @@ struct PaperDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var model: AppViewModel
     let paper: Paper
+    @State private var note = ""
+    @State private var creatingCollection = false
+    @State private var collectionName = ""
+
+    private var progress: PaperProgress { model.progress(for: paper) }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                primaryDecision
                 actions
                 Divider()
                 abstractSection
@@ -17,36 +23,34 @@ struct PaperDetailView: View {
                     Divider()
                     translationSection(translation)
                 }
+                Divider()
+                noteSection
             }
             .frame(maxWidth: 760, alignment: .leading)
             .padding(24)
         }
         .background(AppTheme.canvas(for: colorScheme))
         .navigationTitle(paper.shortID)
+        .onAppear { note = progress.note }
+        .alert("New collection", isPresented: $creatingCollection) {
+            TextField("Collection name", text: $collectionName)
+            Button("Cancel", role: .cancel) { collectionName = "" }
+            Button("Create") {
+                if model.createCollection(named: collectionName, adding: paper) { collectionName = "" }
+            }
+        } message: {
+            Text("This paper will be added to the new collection.")
+        }
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(paper.title)
-                        .font(.title2.weight(.bold))
-                        .textSelection(.enabled)
-                    Text(paper.authors.joined(separator: ", "))
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                }
-                Spacer(minLength: 8)
-                Button {
-                    model.toggleFavorite(paper)
-                } label: {
-                    Image(systemName: model.favorites.contains(paper.shortID) ? "bookmark.fill" : "bookmark")
-                        .font(.title3)
-                }
-                .buttonStyle(.plain)
-        .foregroundStyle(model.favorites.contains(paper.shortID) ? (colorScheme == .light ? AppTheme.skyInk : AppTheme.sky) : .secondary)
-                .accessibilityLabel(model.favorites.contains(paper.shortID) ? "Remove from Saved" : "Save Paper")
-            }
+            Text(paper.title)
+                .font(.title2.weight(.bold))
+                .textSelection(.enabled)
+            Text(paper.authors.joined(separator: ", "))
+                .foregroundStyle(.secondary)
+                .textSelection(.enabled)
 
             HStack(spacing: 10) {
                 Label(paper.publishedAt.formatted(date: .long, time: .omitted), systemImage: "calendar")
@@ -62,40 +66,77 @@ struct PaperDetailView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(AppTheme.sky.opacity(0.12))
-                        .overlay { Rectangle().stroke(AppTheme.sky.opacity(0.45), lineWidth: 1) }
+                        .overlay { RoundedRectangle(cornerRadius: 4).stroke(AppTheme.sky.opacity(0.45), lineWidth: 1) }
+                        .clipShape(RoundedRectangle(cornerRadius: 4))
                 }
             }
         }
     }
 
-    private var actions: some View {
+    private var primaryDecision: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(spacing: 10) {
-                actionButtons
-            }
-            .fixedSize(horizontal: true, vertical: false)
-
-            VStack(alignment: .leading, spacing: 8) {
-                actionButtons
-            }
+            HStack(spacing: 10) { decisionButtons }
+            VStack(alignment: .leading, spacing: 8) { decisionButtons }
         }
-        .controlSize(.regular)
     }
 
     @ViewBuilder
-    private var actionButtons: some View {
+    private var decisionButtons: some View {
         Button {
-            model.openPaper(paper)
+            model.toggleSaved(paper)
         } label: {
-            Label("Open on arXiv", systemImage: "arrow.up.right.square")
+            Label(progress.disposition == .saved ? "Saved" : "Save for later", systemImage: progress.disposition == .saved ? "bookmark.fill" : "bookmark")
         }
         .buttonStyle(.borderedProminent)
         .tint(AppTheme.sky)
         .foregroundStyle(Color.black.opacity(0.82))
 
         Button {
-            model.translate(paper)
+            if progress.disposition == .reviewed { model.moveToInbox(paper) }
+            else { model.markReviewed(paper) }
         } label: {
+            Label(progress.disposition == .reviewed ? "Reviewed" : "Not for me", systemImage: progress.disposition == .reviewed ? "checkmark.circle.fill" : "checkmark.circle")
+        }
+        .tint(progress.disposition == .reviewed ? AppTheme.teal : .secondary)
+
+        Menu {
+            if model.library.collections.isEmpty {
+                Text("No collections yet")
+            } else {
+                ForEach(model.library.collections) { collection in
+                    Button {
+                        model.setCollection(
+                            collection.id,
+                            contains: paper,
+                            enabled: !progress.collectionIDs.contains(collection.id)
+                        )
+                    } label: {
+                        Label(collection.name, systemImage: progress.collectionIDs.contains(collection.id) ? "checkmark" : "rectangle.stack")
+                    }
+                }
+                Divider()
+            }
+            Button("New collection…") { creatingCollection = true }
+        } label: {
+            Label("Collections", systemImage: "rectangle.stack.badge.plus")
+        }
+    }
+
+    private var actions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 10) { actionButtons }
+            VStack(alignment: .leading, spacing: 8) { actionButtons }
+        }
+        .controlSize(.regular)
+    }
+
+    @ViewBuilder
+    private var actionButtons: some View {
+        Button { model.openPaper(paper) } label: {
+            Label("Open on arXiv", systemImage: "arrow.up.right.square")
+        }
+
+        Button { model.translate(paper) } label: {
             if model.translatingPaperID == paper.shortID {
                 Label("Translating…", systemImage: "character.book.closed")
             } else {
@@ -103,11 +144,8 @@ struct PaperDetailView: View {
             }
         }
         .disabled(model.translatingPaperID != nil || ShowcaseMode.isEnabled)
-        .tint(colorScheme == .light ? AppTheme.skyInk : AppTheme.sky)
 
-        Button {
-            model.openPDF(paper)
-        } label: {
+        Button { model.openPDF(paper) } label: {
             if model.downloadingPaperID == paper.shortID {
                 Label("Downloading…", systemImage: "arrow.down.circle")
             } else {
@@ -115,7 +153,6 @@ struct PaperDetailView: View {
             }
         }
         .disabled(model.downloadingPaperID != nil || ShowcaseMode.isEnabled)
-        .tint(colorScheme == .light ? AppTheme.skyInk : AppTheme.sky)
     }
 
     private var abstractSection: some View {
@@ -130,16 +167,31 @@ struct PaperDetailView: View {
 
     private func translationSection(_ translation: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Korean translation").font(.headline)
-                Text(model.settings.geminiModel)
-                    .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
-            }
+            Text("Korean translation").font(.headline)
             Text(translation)
                 .font(.body)
                 .lineSpacing(6)
                 .textSelection(.enabled)
+        }
+    }
+
+    private var noteSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Note").font(.headline)
+                Spacer()
+                Button("Save note") { model.saveNote(note, for: paper) }
+                    .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
+            }
+            TextEditor(text: $note)
+                .font(.body)
+                .frame(minHeight: 110)
+                .padding(8)
+                .scrollContentBackground(.hidden)
+                .background(AppTheme.panel(for: colorScheme))
+                .overlay { RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border(for: colorScheme)) }
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .accessibilityLabel("Paper note")
         }
     }
 }
@@ -148,8 +200,7 @@ private struct FlowLayout: Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let result = layout(proposal: proposal, subviews: subviews)
-        return result.size
+        layout(proposal: proposal, subviews: subviews).size
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {

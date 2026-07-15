@@ -4,26 +4,58 @@ import Foundation
 enum GeminiTranslationError: LocalizedError {
     case invalidRequest
     case invalidResponse
-    case httpStatus(Int)
+    case httpStatus(Int, String?)
     case emptyResponse
 
     var errorDescription: String? {
         switch self {
-        case .invalidRequest: "The translation request could not be created."
+        case .invalidRequest: "The Gemini request could not be created."
         case .invalidResponse: "Gemini returned an unreadable response."
-        case let .httpStatus(code): "Gemini returned HTTP status \(code)."
+        case let .httpStatus(code, message): message ?? "Gemini returned HTTP status \(code)."
         case .emptyResponse: "Gemini returned no translated text."
         }
     }
 }
 
-struct GeminiTranslator {
-    let model: String
+struct GeminiModel: Codable, Hashable, Identifiable {
+    let name: String
+    let displayName: String
+    let inputTokenLimit: Int?
+    let outputTokenLimit: Int?
+    let supportedGenerationMethods: [String]
+
+    var id: String { modelID }
+    var modelID: String { name.replacingOccurrences(of: "models/", with: "") }
+}
+
+struct GeminiTranslationResult {
+    let text: String
+    let usage: TranslationTokenUsage
+}
+
+struct GeminiClient {
     var session: URLSession = .shared
 
-    func translate(_ paper: Paper, apiKey: String) async throws -> String {
+    func listModels(apiKey: String) async throws -> [GeminiModel] {
+        guard var components = URLComponents(string: "https://generativelanguage.googleapis.com/v1beta/models") else {
+            throw GeminiTranslationError.invalidRequest
+        }
+        components.queryItems = [URLQueryItem(name: "pageSize", value: "1000")]
+        guard let url = components.url else { throw GeminiTranslationError.invalidRequest }
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 30
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
+        let (data, response) = try await session.data(for: request)
+        try validate(response: response, data: data)
+        let result = try JSONDecoder().decode(ModelListResponse.self, from: data)
+        return result.models
+            .filter { $0.supportedGenerationMethods.contains("generateContent") }
+            .sorted { $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending }
+    }
+
+    func translate(_ paper: Paper, model: String, apiKey: String) async throws -> GeminiTranslationResult {
         guard let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "https://generativelanguage.googleapis.com/v1/models/\(encodedModel):generateContent")
+              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModel):generateContent")
         else { throw GeminiTranslationError.invalidRequest }
 
         let prompt = """
@@ -46,12 +78,7 @@ struct GeminiTranslator {
         request.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw GeminiTranslationError.invalidResponse
-        }
-        guard (200...299).contains(httpResponse.statusCode) else {
-            throw GeminiTranslationError.httpStatus(httpResponse.statusCode)
-        }
+        try validate(response: response, data: data)
         let result = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
         let text = result.candidates
             .flatMap(\.content.parts)
@@ -59,8 +86,31 @@ struct GeminiTranslator {
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { throw GeminiTranslationError.emptyResponse }
-        return text
+        let metadata = result.usageMetadata
+        return GeminiTranslationResult(
+            text: text,
+            usage: TranslationTokenUsage(
+                promptTokens: metadata?.promptTokenCount ?? 0,
+                responseTokens: metadata?.candidatesTokenCount ?? 0,
+                thinkingTokens: metadata?.thoughtsTokenCount ?? 0,
+                totalTokens: metadata?.totalTokenCount ?? 0
+            )
+        )
     }
+
+    private func validate(response: URLResponse, data: Data) throws {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw GeminiTranslationError.invalidResponse
+        }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let message = (try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data))?.error.message
+            throw GeminiTranslationError.httpStatus(httpResponse.statusCode, message)
+        }
+    }
+}
+
+private struct ModelListResponse: Decodable {
+    let models: [GeminiModel]
 }
 
 private struct GenerateContentRequest: Encodable {
@@ -82,5 +132,17 @@ private struct GenerateContentResponse: Decodable {
         }
         let content: Content
     }
+    struct UsageMetadata: Decodable {
+        let promptTokenCount: Int?
+        let candidatesTokenCount: Int?
+        let thoughtsTokenCount: Int?
+        let totalTokenCount: Int?
+    }
     let candidates: [Candidate]
+    let usageMetadata: UsageMetadata?
+}
+
+private struct GeminiErrorEnvelope: Decodable {
+    struct APIError: Decodable { let message: String }
+    let error: APIError
 }

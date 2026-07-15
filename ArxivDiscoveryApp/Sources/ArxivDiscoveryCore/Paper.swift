@@ -131,16 +131,16 @@ private extension KeyedDecodingContainer {
 }
 
 public struct DiscoveryQuery: Equatable, Sendable {
-    public var days: Int
+    public var interval: DateInterval
     public var maxResults: Int
     public var categories: [String]
 
     public init(
-        days: Int = 1,
-        maxResults: Int = 200,
+        interval: DateInterval,
+        maxResults: Int = 500,
         categories: [String] = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.NE", "stat.ML"]
     ) {
-        self.days = min(max(days, 1), 30)
+        self.interval = interval
         self.maxResults = min(max(maxResults, 1), 500)
         self.categories = categories.isEmpty ? ["cs.AI"] : categories
     }

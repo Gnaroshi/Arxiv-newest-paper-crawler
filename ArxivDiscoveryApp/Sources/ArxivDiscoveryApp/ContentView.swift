@@ -7,36 +7,31 @@ struct ContentView: View {
     @ObservedObject var model: AppViewModel
     @ObservedObject var settings: AppSettings
     @State private var importingLegacy = false
+    @State private var creatingCollection = false
+    @State private var collectionName = ""
 
     var body: some View {
         NavigationSplitView {
             sidebar
-                .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 250)
+                .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 270)
         } content: {
             candidateColumn
-                .navigationSplitViewColumnWidth(min: 320, ideal: 390, max: 480)
+                .navigationSplitViewColumnWidth(min: 430, ideal: 520, max: 720)
         } detail: {
             detailColumn
         }
         .navigationSplitViewStyle(.balanced)
         .background(AppTheme.canvas(for: colorScheme))
         .preferredColorScheme(settings.appearance.colorScheme)
-        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Title, author, subject, or abstract")
+        .searchable(text: $model.searchText, placement: .toolbar, prompt: "Title, author, note, or abstract")
         .toolbar {
-            ToolbarItemGroup {
-                Button {
-                    importingLegacy = true
+            ToolbarItem {
+                Menu {
+                    Button("Import previous papers.json") { importingLegacy = true }
+                    Button("Open data folder") { model.openDataFolder() }
                 } label: {
-                    Label("Import legacy JSON", systemImage: "square.and.arrow.down")
+                    Label("Library options", systemImage: "ellipsis.circle")
                 }
-                .help("Import a previous papers.json without modifying it")
-
-                Button {
-                    model.openDataFolder()
-                } label: {
-                    Label("Open data folder", systemImage: "folder")
-                }
-                .help("Open the app-owned local data folder")
             }
         }
         .fileImporter(
@@ -51,165 +46,216 @@ struct ContentView: View {
                 model.errorMessage = error.localizedDescription
             }
         }
+        .alert("New collection", isPresented: $creatingCollection) {
+            TextField("Collection name", text: $collectionName)
+            Button("Cancel", role: .cancel) { collectionName = "" }
+            Button("Create") {
+                if model.createCollection(named: collectionName) { collectionName = "" }
+            }
+        } message: {
+            Text("Group saved papers like a playlist.")
+        }
+        .onChange(of: model.selectedPaperID) { model.recordSelection() }
+        .onChange(of: model.scope) { model.reconcileSelection() }
     }
 
     private var sidebar: some View {
-        List(selection: $model.scope) {
-            Section("Library") {
-                Label("All papers", systemImage: "tray.full")
-                    .badge(model.papers.count)
-                    .tag(LibraryScope.all)
-                Label("Saved", systemImage: "bookmark")
-                    .badge(model.favorites.count)
-                    .tag(LibraryScope.saved)
-            }
+        VStack(spacing: 0) {
+            List(selection: $model.scope) {
+                Section("Discover") {
+                    Label("Calendar", systemImage: "calendar")
+                        .badge(model.unsearchedRecentCount)
+                        .tag(LibraryScope.calendar)
+                    Label("Inbox", systemImage: "tray")
+                        .badge(model.inboxCount)
+                        .tag(LibraryScope.inbox)
+                    Label("New", systemImage: "sparkles")
+                        .badge(model.newCount)
+                        .tag(LibraryScope.new)
+                }
 
-            if !model.observedSubjects.isEmpty {
-                Section("Subjects") {
-                    ForEach(model.observedSubjects, id: \.self) { subject in
-                        Label(subject, systemImage: "number")
-                            .tag(LibraryScope.subject(subject))
+                Section("Library") {
+                    Label("Saved", systemImage: "bookmark")
+                        .badge(model.savedCount)
+                        .tag(LibraryScope.saved)
+                    Label("Reviewed", systemImage: "checkmark.circle")
+                        .badge(model.reviewedCount)
+                        .tag(LibraryScope.reviewed)
+                    Label("All papers", systemImage: "tray.full")
+                        .badge(model.papers.count)
+                        .tag(LibraryScope.all)
+                }
+
+                Section {
+                    ForEach(model.library.collections) { collection in
+                        Label(collection.name, systemImage: "rectangle.stack")
+                            .badge(model.collectionCount(collection.id))
+                            .tag(LibraryScope.collection(collection.id))
+                    }
+                } header: {
+                    HStack {
+                        Text("Collections")
+                        Spacer()
+                        Button { creatingCollection = true } label: { Image(systemName: "plus") }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("New collection")
+                    }
+                }
+
+                Section("Topics") {
+                    ForEach(SmartTopic.allCases) { topic in
+                        Label(topic.label, systemImage: topic == .vla ? "figure.walk.motion" : "globe.americas")
+                            .badge(model.topicCount(topic))
+                            .tag(LibraryScope.topic(topic))
+                    }
+                }
+
+                if !model.observedSubjects.isEmpty {
+                    Section("Subjects") {
+                        ForEach(model.observedSubjects, id: \.self) { subject in
+                            Label(subject, systemImage: "number")
+                                .tag(LibraryScope.subject(subject))
+                        }
                     }
                 }
             }
+            .listStyle(.sidebar)
 
-            Section("Discovery") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label("Public arXiv metadata", systemImage: "network")
-                        .font(.caption.weight(.semibold))
-                    Text("PDF · translation: manual")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 4)
-            }
+            Divider()
+            usageFooter
         }
-        .listStyle(.sidebar)
         .navigationTitle("Arxiv Discovery")
     }
 
-    private var candidateColumn: some View {
-        VStack(spacing: 0) {
-            discoveryHeader
-            Divider()
-
-            if let errorMessage = model.errorMessage {
-                statusBanner(
-                    icon: "exclamationmark.triangle.fill",
-                    text: errorMessage,
-                    tint: .red,
-                    dismiss: { model.errorMessage = nil }
-                )
-            } else if let notice = model.notice {
-                statusBanner(
-                    icon: "info.circle.fill",
-                    text: notice,
-                    tint: AppTheme.teal,
-                    dismiss: { model.notice = nil }
-                )
+    private var usageFooter: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack {
+                Label("Gemini", systemImage: "sparkles")
+                    .font(.caption.weight(.semibold))
+                Spacer()
+                Circle()
+                    .fill(model.geminiConfigured ? AppTheme.teal : Color.secondary)
+                    .frame(width: 7, height: 7)
             }
-
-            if model.papers.isEmpty {
-                emptyState
-            } else if model.filteredPapers.isEmpty {
-                ContentUnavailableView(
-                    "No matching papers",
-                    systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("Change the library filter or search text.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            if model.geminiConfigured {
+                Text(settings.geminiModel)
+                    .font(.caption)
+                    .lineLimit(1)
+                Text("Today · \(model.todayUsage.requests) requests · \(model.todayUsage.totalTokens.formatted()) tokens")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             } else {
-                List(model.filteredPapers, selection: $model.selectedPaperID) { paper in
-                    PaperRow(
-                        paper: paper,
-                        isSaved: model.favorites.contains(paper.shortID)
-                    )
-                    .tag(paper.shortID)
-                    .contextMenu {
-                        Button(model.favorites.contains(paper.shortID) ? "Remove from Saved" : "Save Paper") {
-                            model.toggleFavorite(paper)
-                        }
-                        Button("Open on arXiv") { model.openPaper(paper) }
-                    }
-                }
-                .listStyle(.inset)
+                Text("Add an API key in Settings")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
         }
-        .background(AppTheme.canvas(for: colorScheme))
+        .padding(12)
     }
 
-    private var discoveryHeader: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(scopeTitle)
-                        .font(.title2.weight(.bold))
-                    Text(refreshSummary)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 8)
-                Picker("Recent window", selection: Binding(
-                    get: { settings.days },
-                    set: { settings.days = $0 }
-                )) {
-                    Text("1 day").tag(1)
-                    Text("3 days").tag(3)
-                    Text("7 days").tag(7)
-                }
-                .labelsHidden()
-                .frame(width: 94)
-                .disabled(model.isDiscovering || ShowcaseMode.isEnabled)
-            }
+    @ViewBuilder
+    private var candidateColumn: some View {
+        if model.scope == .calendar {
+            DiscoveryCalendarView(model: model, settings: settings)
+        } else {
+            VStack(spacing: 0) {
+                listHeader
+                Divider()
 
-            Button {
-                model.discover()
-            } label: {
-                HStack {
-                    if model.isDiscovering {
-                        ProgressView().controlSize(.small)
-                    } else {
-                        Image(systemName: "dot.radiowaves.left.and.right")
+                if let errorMessage = model.errorMessage {
+                    statusBanner(icon: "exclamationmark.triangle.fill", text: errorMessage, tint: .red) {
+                        model.errorMessage = nil
                     }
-                    Text(model.isDiscovering ? "Finding papers…" : "Find recent papers")
+                } else if let notice = model.notice {
+                    statusBanner(icon: "info.circle.fill", text: notice, tint: AppTheme.teal) {
+                        model.notice = nil
+                    }
                 }
-                .frame(maxWidth: .infinity)
+
+                if model.papers.isEmpty {
+                    emptyState
+                } else if model.filteredPapers.isEmpty {
+                    ContentUnavailableView(
+                        "Nothing here",
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        description: Text("Try another library view or search.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    List(model.filteredPapers, selection: $model.selectedPaperID) { paper in
+                        PaperRow(
+                            paper: paper,
+                            progress: model.progress(for: paper),
+                            onReview: { model.markReviewed(paper) },
+                            onSave: { model.toggleSaved(paper) }
+                        )
+                        .tag(paper.shortID)
+                        .contextMenu {
+                            Button(model.favorites.contains(paper.shortID) ? "Remove from Saved" : "Save for later") {
+                                model.toggleSaved(paper)
+                            }
+                            Button("Mark as reviewed") { model.markReviewed(paper) }
+                            Button("Move to Inbox") { model.moveToInbox(paper) }
+                            Divider()
+                            Button("Open on arXiv") { model.openPaper(paper) }
+                        }
+                    }
+                    .listStyle(.inset)
+                }
             }
-            .buttonStyle(.borderedProminent)
-            .tint(AppTheme.sky)
-            .foregroundStyle(Color.black.opacity(0.82))
-            .disabled(model.isDiscovering || ShowcaseMode.isEnabled)
-            .keyboardShortcut("r", modifiers: [.command])
+            .background(AppTheme.canvas(for: colorScheme))
+        }
+    }
+
+    private var listHeader: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(scopeTitle)
+                    .font(.title2.weight(.bold))
+                Text("\(model.filteredPapers.count) papers")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Button {
+                model.scope = .calendar
+            } label: {
+                Label("Choose dates", systemImage: "calendar")
+            }
         }
         .padding(16)
     }
 
     private var emptyState: some View {
         ContentUnavailableView {
-            Label("No papers yet", systemImage: "dot.radiowaves.left.and.right")
+            Label("No papers yet", systemImage: "calendar")
         } description: {
-            Text("Find a bounded list of public arXiv metadata. Discovery does not download PDFs or call Gemini.")
+            Text("Choose one or more dates to begin.")
         } actions: {
-            Button("Find recent papers") { model.discover() }
+            Button("Open calendar") { model.scope = .calendar }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-            Button("Import previous papers.json") { importingLegacy = true }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     @ViewBuilder
     private var detailColumn: some View {
-        if let paper = model.selectedPaper {
+        if model.scope == .calendar {
+            ContentUnavailableView(
+                "Select dates",
+                systemImage: "calendar.badge.clock",
+                description: Text("Searched dates show their paper count and last search time.")
+            )
+        } else if let paper = model.selectedPaper {
             PaperDetailView(model: model, paper: paper)
-                .id(paper.shortID + (paper.abstractKO ?? ""))
+                .id(paper.shortID + (paper.abstractKO ?? "") + model.progress(for: paper).note)
         } else {
             ContentUnavailableView(
                 "Select a paper",
                 systemImage: "doc.text.magnifyingglass",
-                description: Text("Choose one candidate to inspect its metadata and abstract.")
+                description: Text("Review its abstract, then save it or mark it reviewed.")
             )
         }
     }
@@ -229,52 +275,70 @@ struct ContentView: View {
 
     private var scopeTitle: String {
         switch model.scope {
+        case .inbox: "Inbox"
+        case .new: "New"
+        case .reviewed: "Reviewed"
+        case .saved: "Saved"
+        case let .collection(id): model.library.collections.first(where: { $0.id == id })?.name ?? "Collection"
+        case let .topic(topic): topic.label
+        case .calendar: "Discovery calendar"
         case .all: "All papers"
-        case .saved: "Saved papers"
         case let .subject(subject): subject
         }
-    }
-
-    private var refreshSummary: String {
-        if model.isDiscovering { return "Requesting public metadata from arXiv" }
-        if let lastRefresh = model.lastRefresh {
-            return "\(model.filteredPapers.count) visible · refreshed \(lastRefresh.formatted(date: .abbreviated, time: .shortened))"
-        }
-        return "\(model.filteredPapers.count) visible · not refreshed in this app yet"
     }
 }
 
 private struct PaperRow: View {
     @Environment(\.colorScheme) private var colorScheme
     let paper: Paper
-    let isSaved: Bool
+    let progress: PaperProgress
+    let onReview: () -> Void
+    let onSave: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(paper.title)
-                    .font(.headline)
-                    .lineLimit(3)
-                Spacer(minLength: 4)
-                if isSaved {
-                    Image(systemName: "bookmark.fill")
-                        .foregroundStyle(colorScheme == .light ? AppTheme.skyInk : AppTheme.sky)
-                        .accessibilityLabel("Saved")
+        HStack(alignment: .top, spacing: 10) {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 6) {
+                    if progress.firstViewedAt == nil {
+                        Circle()
+                            .fill(AppTheme.sky)
+                            .frame(width: 7, height: 7)
+                            .accessibilityLabel("New")
+                    }
+                    Text(paper.title)
+                        .font(.headline)
+                        .lineLimit(3)
                 }
-            }
-            Text(paper.authors.prefix(3).joined(separator: ", ") + (paper.authors.count > 3 ? " +\(paper.authors.count - 3)" : ""))
-                .font(.subheadline)
+                Text(paper.authors.prefix(3).joined(separator: ", ") + (paper.authors.count > 3 ? " +\(paper.authors.count - 3)" : ""))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                HStack(spacing: 8) {
+                    Text(paper.subjects.first ?? "Uncategorized")
+                    Text(paper.publishedAt.formatted(date: .abbreviated, time: .omitted))
+                    if paper.abstractKO != nil { Text("KO") }
+                    if !progress.note.isEmpty { Image(systemName: "note.text") }
+                }
+                .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
-            HStack(spacing: 8) {
-                Text(paper.subjects.first ?? "Uncategorized")
-                Text(paper.publishedAt.formatted(date: .abbreviated, time: .omitted))
-                if paper.abstractKO != nil { Text("KO") }
             }
-            .font(.caption.weight(.medium))
-            .foregroundStyle(.secondary)
+            Spacer(minLength: 4)
+            VStack(spacing: 10) {
+                Button(action: onSave) {
+                    Image(systemName: progress.disposition == .saved ? "bookmark.fill" : "bookmark")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(progress.disposition == .saved ? (colorScheme == .light ? AppTheme.skyInk : AppTheme.sky) : .secondary)
+                .accessibilityLabel(progress.disposition == .saved ? "Remove from Saved" : "Save for later")
+
+                Button(action: onReview) {
+                    Image(systemName: progress.disposition == .reviewed ? "checkmark.circle.fill" : "checkmark.circle")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(progress.disposition == .reviewed ? AppTheme.teal : .secondary)
+                .accessibilityLabel("Mark as reviewed")
+            }
         }
         .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
     }
 }
