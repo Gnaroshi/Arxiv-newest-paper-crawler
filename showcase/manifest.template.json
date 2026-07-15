@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "applicationId": "arxiv-discovery",
+  "applicationVersion": "0.2.0",
+  "sourceCommit": "<clean-source-commit>",
+  "scenarioId": "native-no-download-discovery",
+  "usesDemoData": true,
+  "captureDate": "<YYYY-MM-DD>",
+  "captureCommand": "open installed Arxiv Discovery.app with --showcase and capture its native window",
+  "sourceFiles": [
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ShowcaseMode.swift",
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ContentView.swift"
+  ],
+  "privacyReviewed": true,
+  "screenshots": []
+}

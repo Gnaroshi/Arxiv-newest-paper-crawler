@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "arxiv-paper-crawler"
+version = "0.2.0"
+description = "Native macOS arXiv discovery with a compatible Python collection CLI."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "arxiv>=2.2.0,<3.0.0",
+  "google-genai>=1.0.0,<2.0.0",
+]
+
+[project.scripts]
+arxiv-paper-crawler = "arxiv_paper_crawler.cli:main"
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3.0,<9.0.0",
+  "pillow>=11.0.0,<13.0.0",
+  "ruff>=0.11.0,<0.12.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arxiv_paper_crawler"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

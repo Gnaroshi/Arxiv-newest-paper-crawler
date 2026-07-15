@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "application": {
+    "id": "arxiv-discovery",
+    "displayName": "Arxiv Discovery",
+    "version": "0.2.0",
+    "bundleId": "dev.gnaroshi.ArxivDiscovery",
+    "minimumStudioVersion": "0.1.0"
+  },
+  "capabilities": [
+    {
+      "id": "launch",
+      "contractVersion": 1,
+      "classification": "read-only",
+      "transport": "bundle"
+    },
+    {
+      "id": "status",
+      "contractVersion": 1,
+      "classification": "read-only",
+      "transport": "executable",
+      "executable": "Contents/MacOS/ArxivDiscoveryIntegration",
+      "arguments": ["status", "--json"],
+      "timeoutSeconds": 3,
+      "maximumOutputBytes": 32768
+    }
+  ],
+  "dataSensitivity": "public-metadata-summary",
+  "redactionLevel": "counts-and-freshness-only",
+  "degradedMode": "Launch remains available when status data is missing or stale.",
+  "updateChannel": "source-checkout"
+}
