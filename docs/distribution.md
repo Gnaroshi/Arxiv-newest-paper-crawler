@@ -3,7 +3,7 @@
 ## Identity
 
 - Bundle ID: `dev.gnaroshi.ArxivDiscovery`
-- Stable local install: `~/Applications/Arxiv Discovery.app`
+- Stable local install: `/Applications/Arxiv Discovery.app`
 - Minimum macOS: 14
 - Version source: `pyproject.toml`
 - Build number: Git commit count

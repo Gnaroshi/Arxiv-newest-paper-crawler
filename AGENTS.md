@@ -31,4 +31,4 @@ swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks
 ./ArxivDiscoveryApp/install_app.sh
 ```
 
-Run the installed app from `~/Applications/Arxiv Discovery.app` for user-facing verification. Do not report Spotlight delivery unless the installed bundle, signing identity, provenance, and index are verified.
+Run the installed app from `/Applications/Arxiv Discovery.app` for user-facing verification. Do not report Spotlight delivery unless the installed bundle, signing identity, provenance, and index are verified.

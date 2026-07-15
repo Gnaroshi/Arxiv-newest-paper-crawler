@@ -13,7 +13,7 @@ The SwiftUI app is the primary interface. A compatible Python CLI remains availa
 - Optional per-paper Korean translation with a Keychain-stored Gemini key
 - Read-only Studio status helper and versioned application manifest
 - Import of the previous `papers.json` and sibling `favorites.json`
-- Signed local app packaging and stable installation under `~/Applications`
+- Signed local app packaging and stable installation under `/Applications`
 
 Discovery does not download PDFs or call Gemini. Those actions happen only after the user selects a paper and presses the corresponding button.
 
@@ -36,7 +36,7 @@ uv sync --dev
 The installed application is:
 
 ```text
-~/Applications/Arxiv Discovery.app
+/Applications/Arxiv Discovery.app
 ```
 
 The install script does not force-quit a running copy. Close the app normally and rerun the command when replacement is blocked.
@@ -80,7 +80,7 @@ Copy `.env.example` to `.env` only for CLI configuration. CLI runtime data remai
 The installed bundle contains a fixed read-only command:
 
 ```bash
-"$HOME/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryIntegration" status --json
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryIntegration" status --json
 ```
 
 It emits counts and freshness only. It never emits titles, abstracts, credentials, PDF paths, or another application's data.
