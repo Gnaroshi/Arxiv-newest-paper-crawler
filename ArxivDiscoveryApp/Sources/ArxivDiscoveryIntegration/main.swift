@@ -42,7 +42,7 @@ private func envelope(status snapshot: IntegrationSnapshot?, now: Date) -> Statu
         return StatusEnvelope(
             contractVersion: 1,
             capability: "status",
-            provider: .init(id: "arxiv-discovery", version: "0.2.0"),
+            provider: .init(id: "arxiv-discovery", version: "0.3.0"),
             freshness: .init(observedAt: nil, generatedAt: now, thresholdSeconds: threshold, isStale: true),
             status: "unavailable",
             data: .init(paperCount: 0, favoriteCount: 0, lastRefresh: nil, nextAction: "Launch Arxiv Discovery to initialize local status."),
@@ -96,7 +96,7 @@ guard arguments == ["status", "--json"] else {
         StatusEnvelope(
             contractVersion: 1,
             capability: "status",
-            provider: .init(id: "arxiv-discovery", version: "0.2.0"),
+            provider: .init(id: "arxiv-discovery", version: "0.3.0"),
             freshness: .init(observedAt: nil, generatedAt: Date(), thresholdSeconds: 129_600, isStale: true),
             status: "incompatible",
             data: .init(paperCount: 0, favoriteCount: 0, lastRefresh: nil, nextAction: "Use the fixed status --json command."),

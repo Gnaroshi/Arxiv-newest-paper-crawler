@@ -32,7 +32,7 @@ final class AppViewModel: ObservableObject {
         settings: AppSettings,
         repository: PaperRepository = PaperRepository(),
         client: ArxivSearching = ArxivClient(),
-        version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0"
+        version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.3.0"
     ) {
         self.settings = settings
         self.repository = repository

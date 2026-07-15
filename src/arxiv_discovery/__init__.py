@@ -1,4 +1,4 @@
-"""ArXiv paper crawler package."""
+"""Safe local arXiv discovery application."""
 
 from .config import Settings, load_settings
 

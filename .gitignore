@@ -36,10 +36,8 @@ ENV/
 # Environment files
 .env
 
-# Logs
+# Logs and OS files
 *.log
-
-# OS junk
 .DS_Store
 .DS_Store?
 ._*
@@ -51,6 +49,8 @@ Desktop.ini
 /data/favorites.json
 /data/pdfs/*
 !/data/pdfs/.gitkeep
+/data/*.bak
+/data/*.tmp
 
 # Legacy local files
 /config.py

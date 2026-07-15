@@ -1,0 +1,32 @@
+name: Validate native application
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - name: Verify Python compatibility and provider contracts
+        run: |
+          uv sync --dev
+          uv run pytest
+          uv run ruff check .
+          uv build
+      - name: Verify native Swift targets
+        run: |
+          swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks
+          swift build -c release --package-path ArxivDiscoveryApp
+      - name: Verify public manifest and application metadata
+        run: |
+          plutil -lint ArxivDiscoveryApp/Info.plist
+          python3 -m json.tool gnaroshi.app.json >/dev/null

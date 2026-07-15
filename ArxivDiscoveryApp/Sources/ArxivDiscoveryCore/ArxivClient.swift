@@ -59,7 +59,7 @@ public struct ArxivClient: ArxivSearching {
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
-        request.setValue("ArxivDiscovery/0.2.0 (https://github.com/Gnaroshi/Arxiv-newest-paper-crawler)", forHTTPHeaderField: "User-Agent")
+        request.setValue("ArxivDiscovery/0.3.0 (https://github.com/Gnaroshi/Arxiv-newest-paper-crawler)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/atom+xml", forHTTPHeaderField: "Accept")
 
         let (data, response) = try await session.data(for: request)
