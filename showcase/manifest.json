@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "applicationId": "arxiv-discovery",
+  "applicationVersion": "0.3.0",
+  "sourceCommit": "88c033dd9b25eec80fabce6a2a591725654d6b9f",
+  "scenarioId": "native-no-download-discovery",
+  "usesDemoData": true,
+  "captureDate": "2026-07-15",
+  "captureCommand": "open the installed Arxiv Discovery.app with --showcase and capture its native window at 2x",
+  "sourceFiles": [
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ShowcaseMode.swift",
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ContentView.swift"
+  ],
+  "privacyReviewed": true,
+  "screenshots": [
+    {
+      "id": "discovery-list",
+      "file": "screenshots/discovery-list.png",
+      "width": 1946,
+      "height": 1480,
+      "stepId": "discover",
+      "locale": "en",
+      "theme": "dark",
+      "alt": "Arxiv Discovery native macOS window showing three deterministic demo paper candidates with network actions disabled."
+    }
+  ]
+}
