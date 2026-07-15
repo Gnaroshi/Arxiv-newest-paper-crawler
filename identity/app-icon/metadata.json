@@ -1,11 +1,18 @@
 {
+  "schemaVersion": 1,
   "id": "arxiv-discovery-v1",
+  "source": "arxiv-discovery-v1.png",
   "sourceCandidate": "app-family-p5-arxiv-discovery",
   "sourceSha256": "17a1678d5b6ffbbd6592c598664c5889777533d378354b4ff5672efacaa81ad7",
-  "exportedAt": "2026-07-14",
-  "masterSize": "2048x2048",
-  "productionSizes": [32, 64, 128, 180],
-  "targetPlatforms": ["Flask web UI", "Gnaroshi Studio managed-app card"],
+  "sourceSize": [
+    2048,
+    2048
+  ],
   "ownerApproved": true,
-  "nativeApplicationIcon": false
+  "targetPlatforms": [
+    "native macOS application",
+    "Gnaroshi Studio managed-app card"
+  ],
+  "resampling": "nearest-neighbor",
+  "icnsSha256": "b423e3c76f3b8119e127fa02f92627030da89d83e7623b1cc9d2b7c5e75eed4c"
 }

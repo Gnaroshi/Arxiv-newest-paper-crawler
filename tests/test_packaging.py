@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -11,13 +10,11 @@ import pytest
 
 from arxiv_discovery.collector import collect_papers, collection_window
 from arxiv_discovery.config import load_settings
-from arxiv_discovery.legacy import main as legacy_main
 from arxiv_discovery.storage import (
     DataCorruptionError,
     load_papers,
     save_papers,
 )
-from arxiv_discovery.web.app import create_app
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,7 +38,6 @@ def test_new_and_legacy_runtime_locations_are_distinct(tmp_path: Path) -> None:
     legacy = load_settings(tmp_path, legacy=True)
     assert modern.papers_path == tmp_path / "data" / "papers.json"
     assert modern.download_mode == "none"
-    assert modern.flask_host == "127.0.0.1"
     assert modern.timezone == "UTC"
     assert modern.cutoff_time == "00:00"
     assert legacy.papers_path == tmp_path / "papers.json"
@@ -51,7 +47,9 @@ def test_new_and_legacy_runtime_locations_are_distinct(tmp_path: Path) -> None:
     assert legacy.cutoff_time == "07:00"
 
 
-def test_legacy_main_keeps_process_serve_and_all(monkeypatch, tmp_path: Path) -> None:
+def test_provider_legacy_keeps_process_serve_and_all(
+    monkeypatch, tmp_path: Path
+) -> None:
     import arxiv_discovery.legacy as legacy
 
     settings = load_settings(tmp_path, legacy=True)
@@ -62,10 +60,10 @@ def test_legacy_main_keeps_process_serve_and_all(monkeypatch, tmp_path: Path) ->
         "run_processing_workflow",
         lambda _settings: events.append("process"),
     )
-    monkeypatch.setattr(legacy, "run_web_app", lambda _settings: events.append("serve"))
-    assert legacy_main(["process"]) == 0
-    assert legacy_main(["serve"]) == 0
-    assert legacy_main(["all"]) == 0
+    monkeypatch.setattr(legacy, "open_native_app", lambda: events.append("serve"))
+    assert legacy.main(["process"]) == 0
+    assert legacy.main(["serve"]) == 0
+    assert legacy.main(["all"]) == 0
     assert events == ["process", "serve", "process", "serve"]
 
 
@@ -131,14 +129,3 @@ def test_storage_is_atomic_and_corruption_is_visible(tmp_path: Path) -> None:
     path.write_text("{broken", encoding="utf-8")
     with pytest.raises(DataCorruptionError, match="papers.json"):
         load_papers(path)
-
-
-def test_existing_flask_routes_render_from_packaged_templates(tmp_path: Path) -> None:
-    settings = load_settings(tmp_path)
-    save_papers(settings.papers_path, [paper()])
-    settings.favorites_path.write_text(json.dumps(["2401.00001v1"]), encoding="utf-8")
-    client = create_app(settings).test_client()
-    assert client.get("/").status_code == 200
-    assert client.get("/all").status_code == 200
-    response = client.post("/favorite/2401.00001v1")
-    assert response.status_code == 302

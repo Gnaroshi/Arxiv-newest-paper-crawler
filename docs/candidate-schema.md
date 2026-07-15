@@ -9,7 +9,7 @@ Every machine-readable command writes one JSON object to stdout:
   "schemaVersion": 1,
   "provider": {
     "id": "arxiv-crawler",
-    "version": "0.1.0",
+    "version": "0.4.0",
     "contractVersion": 1
   },
   "capability": "discover-papers",

@@ -78,7 +78,6 @@ def _env_list(name: str, default: tuple[str, ...]) -> tuple[str, ...]:
 class Settings:
     project_root: Path
     data_dir: Path
-    templates_dir: Path
     papers_path: Path
     favorites_path: Path
     pdfs_dir: Path
@@ -90,11 +89,8 @@ class Settings:
     translate: bool = False
     download_mode: str = "none"
     google_api_key: str | None = None
-    gemini_model: str = "gemini-1.5-flash-latest"
+    gemini_model: str = "gemini-3.5-flash"
     translation_delay_seconds: float = 1.0
-    flask_host: str = "127.0.0.1"
-    flask_port: int = 8080
-    flask_debug: bool = False
     subject_map: dict[str, str] = field(default_factory=dict)
     legacy_mode: bool = False
 
@@ -155,7 +151,6 @@ def load_settings(
     return Settings(
         project_root=root,
         data_dir=runtime_root,
-        templates_dir=package_root / "web" / "templates",
         papers_path=runtime_root / "papers.json",
         favorites_path=runtime_root / "favorites.json",
         pdfs_dir=runtime_root / "pdfs",
@@ -166,12 +161,13 @@ def load_settings(
         max_results=maximum,
         translate=legacy or _env_bool("TRANSLATE", False),
         download_mode="all" if legacy else "none",
-        google_api_key=(os.getenv("GOOGLE_API_KEY") or _env("GOOGLE_API_KEY")),
-        gemini_model=_env("GEMINI_MODEL") or "gemini-1.5-flash-latest",
+        google_api_key=(
+            os.getenv("GEMINI_API_KEY")
+            or os.getenv("GOOGLE_API_KEY")
+            or _env("GOOGLE_API_KEY")
+        ),
+        gemini_model=_env("GEMINI_MODEL") or "gemini-3.5-flash",
         translation_delay_seconds=_env_float("TRANSLATION_DELAY_SECONDS", 1.0),
-        flask_host=_env("FLASK_HOST") or ("0.0.0.0" if legacy else "127.0.0.1"),
-        flask_port=_env_int("FLASK_PORT", 8080),
-        flask_debug=_env_bool("FLASK_DEBUG", legacy),
         subject_map=subject_map,
         legacy_mode=legacy,
     )

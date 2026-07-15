@@ -1,7 +1,6 @@
 # Codex / agent files
 .codex/
 .codex*
-AGENTS.md
 SKILL.md
 
 # Python caches and generated files
@@ -23,6 +22,8 @@ __pycache__/
 htmlcov/
 build/
 dist/
+.build/
+*.xcodeproj/xcuserdata/
 *.egg-info/
 .eggs/
 
@@ -32,25 +33,32 @@ venv/
 env/
 ENV/
 
-# Logs
-*.log
+# Environment files
+.env
 
-# OS junk
+# Logs and OS files
+*.log
 .DS_Store
 .DS_Store?
 ._*
 Thumbs.db
 Desktop.ini
 
-# Local config and generated app artifacts
-/config.py
-/favorites.json
-/papers.json
-/pdfs/*
-!/pdfs/.gitkeep
+# Runtime output
 /data/papers.json
 /data/favorites.json
 /data/pdfs/*
+!/data/pdfs/.gitkeep
 /data/*.bak
 /data/*.tmp
+
+# Legacy local files
+/config.py
+/papers.json
+/favorites.json
+/pdfs/
 /robot/
+
+# Local macOS delivery and capture output
+/ArxivDiscoveryApp/dist/
+/showcase/screenshots/

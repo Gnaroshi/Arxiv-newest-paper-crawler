@@ -4,30 +4,29 @@ build-backend = "hatchling.build"
 
 [project]
 name = "arxiv-discovery"
-version = "0.2.0"
-description = "Discover recent arXiv papers and review them through a local Flask application."
+version = "0.4.0"
+description = "Native macOS arXiv discovery with safe Python compatibility CLIs."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "arxiv>=2.2.0,<3.0.0",
-  "flask>=3.1.0,<4.0.0",
+  "google-genai>=1.0.0,<2.0.0",
 ]
-
-[project.optional-dependencies]
-translation = ["google-generativeai>=0.8.5,<0.9.0"]
 
 [project.scripts]
 arxiv-discovery = "arxiv_discovery.cli:main"
+arxiv-paper-crawler = "arxiv_paper_crawler.cli:main"
 
 [dependency-groups]
 dev = [
   "build>=1.2.2,<2.0.0",
   "pytest>=8.3.0,<9.0.0",
+  "pillow>=11.0.0,<13.0.0",
   "ruff>=0.11.0,<0.12.0",
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/arxiv_discovery"]
+packages = ["src/arxiv_discovery", "src/arxiv_paper_crawler"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "gnaroshi.app.json" = "arxiv_discovery/gnaroshi.app.json"

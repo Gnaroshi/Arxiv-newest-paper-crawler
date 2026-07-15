@@ -1,95 +1,105 @@
-# Arxiv newest paper crawler
+# Arxiv Discovery
 
-Discover recent arXiv papers, optionally translate or download explicitly selected content, and review saved results through the existing local Flask UI. The installable provider is `arxiv-discovery`; the historical `main.py` workflow remains available.
+Arxiv Discovery is a native macOS application for finding recent arXiv papers, narrowing the candidate list, reading one abstract, and explicitly choosing whether to save, translate, open, or download it.
 
-## Setup
+The SwiftUI app is the primary interface. Python remains available for compatibility and scripted public-metadata discovery; there is no local web server.
 
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
+## What works
+
+- Multi-date UTC discovery calendar with paper counts and searched/unsearched state
+- Inbox, New, Reviewed, Saved, collection, VLA, World Models, subject, and text filters
+- Persistent collections, per-paper notes, translations, and discovery history
+- Explicit per-paper PDF download
+- Optional per-paper Korean translation with a Keychain-stored Gemini key, selectable compatible model, and app-local token totals
+- Private Studio backup export plus read-only status helper
+- Import of the previous `papers.json` and sibling `favorites.json`
+- Safe schema-v1 candidate discovery and export from the Python provider
+- Signed local app packaging and stable installation under `/Applications`
+
+Discovery does not download PDFs or call Gemini. Those actions happen only after the user selects a paper and requests them.
+
+## Requirements
+
+- macOS 14+
+- Swift 5.9+
+- Python 3.11+
+- [`uv`](https://docs.astral.sh/uv/)
+- A local Apple Development or Developer ID Application signing identity for stable installation
+
+## Build and install the macOS app
 
 ```bash
-uv sync --extra translation --dev
+uv sync --dev
+./ArxivDiscoveryApp/build_app.sh
+./ArxivDiscoveryApp/install_app.sh
 ```
 
-`GOOGLE_API_KEY` is optional and used only by the explicit `translate` command or the legacy processing workflow. Discovery does not translate automatically.
+The installed application is `/Applications/Arxiv Discovery.app`. The install script does not force-quit a running copy; close the app normally and rerun the command when replacement is blocked.
 
-## Safe provider CLI
+## Native data
 
-Studio uses exactly:
+The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
+
+- `papers.json`: public arXiv metadata and optional Korean abstracts
+- `favorites.json`: saved arXiv IDs
+- `library.json`: Inbox/Reviewed/Saved state, collections, and notes
+- `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
+- `translation-usage.json`: app-local Gemini request and token totals
+- `status.json`: safe count and freshness summary for read-only integration
+- `PDFs/`: PDFs downloaded by explicit action
+
+Use the app Import command to merge an older `data/papers.json`. When a sibling `favorites.json` exists, favorites are imported too. Source files are never modified.
+
+## Optional Gemini translation
+
+Open Settings, enter a Gemini API key, and save it to Keychain. The app loads models available to that key and shows only models supporting `generateContent`. Translation sends only the selected public paper title and abstract. Gemini response token metadata is accumulated locally; account-wide billing or quota usage is not claimed.
+
+The compatibility CLIs accept `GEMINI_API_KEY`; the app does not read `.env`.
+
+## Python CLIs
+
+The safe provider retains schema-v1 discovery and export for scripts without becoming the Studio integration endpoint:
 
 ```bash
 uv run arxiv-discovery discover --json --download=none
-```
-
-The default download mode is `none`. Available commands are:
-
-```bash
-uv run arxiv-discovery discover --download=none
 uv run arxiv-discovery discover --download=selected --select arxiv:2401.00001
-uv run arxiv-discovery discover --download=all
-uv run arxiv-discovery translate --candidate arxiv:2401.00001
 uv run arxiv-discovery export --json
 uv run arxiv-discovery doctor --json
-uv run arxiv-discovery serve
+uv run arxiv-discovery version --json
+uv run arxiv-discovery recent --json --limit 5
 ```
 
-`selected` requires at least one candidate or arXiv ID. `all` is intentionally explicit because it downloads every matching result. Only candidates downloaded by that invocation contain `downloadedLocalPath`.
+`discover` defaults to no download and no translation. `selected` and `all` download modes remain explicit. Candidate fields and handoff boundaries are documented in [`docs/candidate-schema.md`](docs/candidate-schema.md).
 
-Discovery-window options are per-run rather than a tracked personal schedule:
+The previous processing workflow also remains available:
 
 ```bash
-uv run arxiv-discovery discover \
-  --timezone UTC \
-  --cutoff-time 00:00 \
-  --category cs.AI \
-  --category cs.CL \
-  --days 2 \
-  --max-results 100 \
-  --download=none
+uv run arxiv-paper-crawler process
+uv run arxiv-paper-crawler process --download-pdfs
+uv run arxiv-paper-crawler process --force-recrawl
+uv run arxiv-paper-crawler all
 ```
 
-The new CLI defaults to UTC, midnight cutoff, one day, 200 results, the documented research categories, no translation, and no download. Environment overrides use the `ARXIV_DISCOVERY_` prefix; legacy `ARXIV_PAPER_CRAWLER_` configuration remains readable.
+`all` and either CLI's old `serve` spelling open the installed native app. Use `process` when a script still needs repository-local JSON. Copy `.env.example` to `.env` only for CLI configuration; CLI runtime data remains in `data/`, separate from native data until explicitly imported.
 
-## Legacy compatibility
+## Integration status
 
-These commands remain available:
+Studio uses the fixed executable bundled with the app:
 
 ```bash
-uv run python main.py process
-uv run python main.py serve
-uv run python main.py all
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryIntegration" status --json
 ```
 
-`process` and `all` preserve the historical behavior: they download every matching PDF, attempt translation when configured, and write root `papers.json`. They print that impact before starting. `serve` preserves the favorites and all-papers Flask views. The legacy defaults remain Asia/Seoul, 07:00, all-interface Flask binding, and debug mode for compatibility; use the new CLI for loopback-safe defaults.
+`status --json` emits counts and freshness only. The separately declared `backup --json` command emits a versioned private snapshot for Gnaroshi Studio. It includes the app's paper library and review state but never API keys, Keychain data, PDFs, downloaded-file paths, or another application's data. The general Python provider is not used as an implicit Studio command surface.
 
-## Candidate contract
-
-JSON commands emit one schema-v1 value on stdout. Diagnostics go to stderr. Candidate records contain stable candidate/arXiv IDs, bibliographic fields, submitted/updated times, arXiv/PDF URLs, translation status, duplicate hint, and source provider. See [`docs/candidate-schema.md`](docs/candidate-schema.md).
-
-Studio may discover, filter, preview a PaperFlow or Paper Lab handoff, and open the validated arXiv page. No Studio command downloads, translates, favorites, publishes, writes PaperFlow, or writes Paper Lab. Send actions are previews until the destination application confirms its own import.
-
-## Local data and web UI
-
-The new CLI uses ignored runtime files under `data/`:
-
-- `data/papers.json`
-- `data/favorites.json`
-- `data/pdfs/`
-- `*.bak` recovery copies created before JSON replacement
-
-Legacy commands keep root `papers.json`, `favorites.json`, and `pdfs/`. Nothing migrates or deletes them automatically. See [`docs/migration.md`](docs/migration.md).
-
-The Flask UI remains intentionally unchanged at this stage:
-
-- `/`: saved/favorite papers
-- `/all`: all cached papers
-- `/favorite/<short_id>`: explicit favorite toggle
-
-The new `serve` command binds to `127.0.0.1:8080` with debug disabled unless explicitly overridden. The UI is not a provider API; Studio consumes only the CLI JSON contract.
-
-## Development
+## Development checks
 
 ```bash
 uv run pytest
 uv run ruff check .
-uv run python -m build
+swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks
+swift build -c release --package-path ArxivDiscoveryApp
+./ArxivDiscoveryApp/build_app.sh
 ```
+
+Product, architecture, design, distribution, compatibility, and rollback decisions are documented in [`docs/`](docs/).

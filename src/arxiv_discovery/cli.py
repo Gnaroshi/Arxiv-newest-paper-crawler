@@ -4,6 +4,8 @@ import argparse
 from collections.abc import Sequence
 from pathlib import Path
 
+from arxiv_paper_crawler.cli import open_native_app
+
 from .config import load_settings
 from .provider import (
     discover,
@@ -15,7 +17,6 @@ from .provider import (
     translate_selected,
     version,
 )
-from .web.app import run_web_app
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="arxiv-discovery",
         description="Safe local arXiv paper discovery provider.",
     )
-    parser.add_argument("--version", action="version", version="%(prog)s 0.2.0")
+    parser.add_argument("--version", action="version", version="%(prog)s 0.4.0")
     subcommands = parser.add_subparsers(dest="command", required=True)
     discover_command = subcommands.add_parser(
         "discover", help="Discover candidates without writing local data"
@@ -45,9 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     translate.add_argument("--candidate", action="append", required=True)
     translate.add_argument("--json", action="store_true")
 
-    serve = subcommands.add_parser("serve", help="Run the existing local Flask UI")
-    serve.add_argument("--host")
-    serve.add_argument("--port", type=int)
+    subcommands.add_parser("serve", help="Open the native macOS application")
 
     export = subcommands.add_parser(
         "export", help="Export cached candidates through the versioned schema"
@@ -152,11 +151,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             json_mode=args.json,
         )
     if args.command == "serve":
-        if args.host:
-            settings = settings.with_overrides(flask_host=args.host)
-        if args.port:
-            settings = settings.with_overrides(flask_port=args.port)
-        run_web_app(settings)
+        print(
+            "The Flask interface has been replaced by Arxiv Discovery.app. "
+            "Opening the native application."
+        )
+        return 0 if open_native_app() else 2
     if args.command == "export":
         try:
             return emit_result(

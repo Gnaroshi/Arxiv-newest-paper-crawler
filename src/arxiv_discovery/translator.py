@@ -20,10 +20,9 @@ def translate_papers(
         diagnostic("GOOGLE_API_KEY is not set; keeping English abstracts only.")
         return [dict(paper) for paper in papers]
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=settings.google_api_key)
-        model = genai.GenerativeModel(settings.gemini_model)
+        client = genai.Client(api_key=settings.google_api_key)
     except Exception:
         diagnostic("Translation provider is unavailable.")
         return [dict(paper) for paper in papers]
@@ -32,9 +31,12 @@ def translate_papers(
     for paper in papers:
         updated = dict(paper)
         try:
-            response = model.generate_content(
-                "Translate this academic abstract into Korean. Return only the "
-                f"translation.\n\n{paper['abstract']}"
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=(
+                    "Translate this academic abstract into Korean. Return only the "
+                    f"translation.\n\n{paper['abstract']}"
+                ),
             )
             text = getattr(response, "text", "").strip()
             if text:

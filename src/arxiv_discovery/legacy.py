@@ -4,11 +4,12 @@ import argparse
 import datetime as dt
 from collections.abc import Sequence
 
+from arxiv_paper_crawler.cli import open_native_app
+
 from .collector import collect_papers
 from .config import Settings, load_settings
 from .storage import save_papers
 from .translator import translate_papers
-from .web.app import run_web_app
 
 
 def _already_processed_today(settings: Settings) -> bool:
@@ -58,5 +59,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.action in {"all", "process"}:
         run_processing_workflow(settings)
     if args.action in {"all", "serve"}:
-        run_web_app(settings)
+        open_native_app()
     return 0

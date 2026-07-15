@@ -1,18 +1,27 @@
 {
   "schemaVersion": 1,
   "applicationId": "arxiv-discovery",
-  "applicationVersion": "0.1.0",
-  "sourceCommit": "e48da6e1434adbeee8d6570816141d0f393a0fda",
-  "scenarioId": "vla-no-download-paperflow-preview",
+  "applicationVersion": "0.3.0",
+  "sourceCommit": "1f87f235e2bef334980c19e019c016bb2a60ef0c",
+  "scenarioId": "native-no-download-discovery",
   "usesDemoData": true,
-  "captureDate": "2026-07-13",
-  "captureCommand": "GNAROSHI_SHOWCASE=1 python main.py serve",
-  "sourceFiles": ["webapp.py", "templates/all_papers.html", "templates/paper_detail.html", "templates/handoff_preview.html"],
+  "captureDate": "2026-07-15",
+  "captureCommand": "open the installed Arxiv Discovery.app with --showcase and capture its native window at 2x",
+  "sourceFiles": [
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ShowcaseMode.swift",
+    "ArxivDiscoveryApp/Sources/ArxivDiscoveryApp/ContentView.swift"
+  ],
   "privacyReviewed": true,
   "screenshots": [
-    { "id": "discovery-list", "file": "screenshots/discovery-list.png", "width": 3200, "height": 2000, "stepId": "discovery-list", "locale": "en", "theme": "dark", "alt": "Arxiv Discovery list of deterministic example VLA paper candidates in no-download mode." },
-    { "id": "candidate-detail", "file": "screenshots/candidate-detail.png", "width": 3200, "height": 2000, "stepId": "candidate-detail", "locale": "en", "theme": "dark", "alt": "Arxiv Discovery candidate detail showing reviewed example metadata and PDF download disabled." },
-    { "id": "handoff-preview", "file": "screenshots/handoff-preview.png", "width": 3200, "height": 2000, "stepId": "handoff-preview", "locale": "en", "theme": "dark", "alt": "Arxiv Discovery PaperFlow handoff preview listing public metadata only and no PDF." },
-    { "id": "discovery-list-light", "file": "screenshots/discovery-list-light.png", "width": 3200, "height": 2000, "stepId": "discovery-list", "locale": "en", "theme": "light", "alt": "Light theme verification of the Arxiv Discovery example candidate list." }
+    {
+      "id": "discovery-list",
+      "file": "screenshots/discovery-list.png",
+      "width": 1946,
+      "height": 1480,
+      "stepId": "discover",
+      "locale": "en",
+      "theme": "dark",
+      "alt": "Arxiv Discovery native macOS window showing three deterministic demo paper candidates with network actions disabled."
+    }
   ]
 }

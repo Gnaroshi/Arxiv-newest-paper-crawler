@@ -1,9 +1,0 @@
-{% extends "layout.html" %}
-{% block content %}
-<p><a href="{{ url_for('all_papers') }}">← Back to candidates</a></p>
-<article>
-  <header><small>Reviewed metadata · no-download mode</small><h1>{{ paper.title }}</h1><p>{{ paper.authors|join(', ') }}</p></header>
-  <h2>Candidate summary</h2><p>{{ paper.abstract }}</p>
-  <div class="workflow-actions"><a href="{{ url_for('handoff_preview', short_id=paper.short_id) }}" role="button">Preview PaperFlow handoff</a><button disabled>PDF download disabled</button></div>
-</article>
-{% endblock %}

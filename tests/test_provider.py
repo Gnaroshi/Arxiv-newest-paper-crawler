@@ -41,20 +41,29 @@ def stored_paper(*, short_id: str = "2401.00001v1", translated: bool = False):
 
 def test_manifest_declares_real_fixed_provider_entrypoints() -> None:
     manifest = json.loads((ROOT / "gnaroshi.app.json").read_text(encoding="utf-8"))
-    assert manifest["id"] == "arxiv-crawler"
-    assert manifest["entrypoints"]["cli"]["executable"] == "arxiv-discovery"
-    assert manifest["entrypoints"]["localHttp"] == {}
-    assert manifest["entrypoints"]["deepLinks"] == []
-    assert manifest["privacy"]["credentials"] == "provider-owned"
-    assert "open-arxiv-paper" in manifest["capabilities"]
-    assert manifest["entrypoints"]["cli"]["recentActivitySubcommand"] == [
-        "recent",
-        "--json",
-        "--limit",
-        "5",
-    ]
-    assert manifest["health"]["contractVersion"] == 1
-    assert manifest["distribution"]["source"]["mode"] == "git-fetch"
+    assert manifest["application"]["id"] == "arxiv-discovery"
+    assert manifest["application"]["bundleId"] == "dev.gnaroshi.ArxivDiscovery"
+    assert manifest["application"]["version"] == "0.4.0"
+    status = next(
+        capability
+        for capability in manifest["capabilities"]
+        if capability["id"] == "status"
+    )
+    assert status["executable"] == "Contents/MacOS/ArxivDiscoveryIntegration"
+    assert status["arguments"] == ["status", "--json"]
+    assert status["classification"] == "read-only"
+    backup = next(
+        capability
+        for capability in manifest["capabilities"]
+        if capability["id"] == "backup-export"
+    )
+    assert backup["arguments"] == ["backup", "--json"]
+    assert backup["classification"] == "private-sensitive"
+    assert backup["maximumOutputBytes"] == 5 * 1024 * 1024
+    assert (
+        manifest["redactionLevel"]
+        == "status-is-summary-backup-is-explicit-private-export"
+    )
 
 
 def test_candidate_schema_is_stable_across_arxiv_versions() -> None:
@@ -228,7 +237,7 @@ def test_version_and_recent_activity_are_versioned_bounded_and_path_free(
     build = version()
     recent = recent_activity(settings, limit=1)
     serialized = json.dumps(recent)
-    assert build["data"]["version"] == "0.2.0"
+    assert build["data"]["version"] == "0.4.0"
     assert set(build["data"]["build"]) == {"commit", "number", "dirty"}
     assert recent["capability"] == "recent-activity"
     assert recent["data"]["activityCount"] == 1

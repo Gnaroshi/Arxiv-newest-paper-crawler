@@ -1,32 +1,23 @@
-# Packaging and runtime-data migration
+# Runtime-data migration
 
 ## Repository hygiene
 
-The repository ignores Python caches, `.DS_Store`, test/lint caches, generated paper indexes, favorites, PDF downloads, temporary JSON files, and backups. The cleanup is forward-only; Git history is not rewritten.
+Python caches, generated paper indexes, favorites, PDFs, temporary JSON files, backups, native build products, and local showcase captures are ignored. The cleanup is forward-only; Git history is not rewritten and local PDFs must never be removed as part of migration.
 
-No generated or local-only file is tracked at this baseline. If an older clone still has one in its index, stop tracking it without deleting the working copy:
+## Data boundaries
 
-```bash
-git rm -r --cached --ignore-unmatch __pycache__ .pytest_cache .ruff_cache
-git rm --cached --ignore-unmatch .DS_Store papers.json favorites.json
-git rm -r --cached --ignore-unmatch pdfs data/pdfs
-```
-
-Do not run `rm`, `git clean`, or history-rewrite commands against local PDFs. After updating, verify with `git status` that each PDF is ignored and still present locally.
-
-## Command coexistence
-
-The installable package adds `arxiv-discovery`. `main.py` remains a compatibility wrapper for `process`, `serve`, and `all`.
-
-| Surface | Runtime data | Download default | Translation default | Web default |
+| Surface | Runtime data | Download default | Translation default | Presentation |
 | --- | --- | --- | --- | --- |
-| `arxiv-discovery` | `data/` | `none` | never during discover | `127.0.0.1`, debug off |
-| `python main.py` | repository root | `all` for process/all | historical optional Gemini step | `0.0.0.0`, debug on |
+| Native app | Application Support | explicit per-paper action | explicit per-paper action | SwiftUI |
+| `arxiv-discovery` | `data/` | `none` | never during discover | structured CLI output |
+| `arxiv-paper-crawler` / `main.py` | `data/` | disabled unless requested | optional during process | compatibility CLI |
 
-This split prevents a package update from silently moving or deleting existing files. To use old records with the new export command, copy them manually after closing the Flask app, retain the originals, and run `arxiv-discovery doctor --json` before export. No automatic migration or backfill runs.
+The native app never reads repository-local data implicitly. Use its Import command to select a previous `papers.json`; a sibling `favorites.json` is migrated into Saved state when present. The source files are preserved, records merge by stable arXiv ID, and an existing Korean abstract is not replaced by an empty value.
+
+The safe provider contract remains useful for scripts and candidate export, but Studio invokes only the fixed read-only helper inside the installed app bundle. The old `serve` spelling opens the native app and never binds a local port.
 
 ## Recovery
 
-New JSON writes create a same-directory temporary file, flush it, and replace the destination atomically. When a previous destination exists it is copied to `<name>.bak` first. Corrupt JSON blocks export and appears as `local-data-corrupt`; it is not presented as an empty candidate set.
+CLI JSON writes replace the destination atomically and keep a same-directory `.bak` copy when a previous destination exists. Corrupt JSON blocks export rather than appearing as an empty result. Preserve the corrupt file, restore the backup, and rerun `arxiv-discovery doctor --json`.
 
-Restore by closing the app, preserving the corrupt file for inspection, copying the `.bak` content back to the original filename, and rerunning doctor. Favorites and PDFs are independent and must not be deleted during index recovery.
+Native rollback is app-bundle based. Close Arxiv Discovery, preserve Application Support, reinstall the previous verified bundle, and reopen it. Do not delete native or CLI data during a code rollback.

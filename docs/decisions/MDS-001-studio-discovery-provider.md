@@ -1,10 +1,16 @@
 # MDS-001: Studio discovery provider
 
-- Status: accepted
+- Status: superseded for presentation and Studio invocation
 - Date: 2026-07-12
 - Crawler baseline: `f633ce2a3ad3ea9818eed10af1cb2fe09eeca8cf`
 - Provider ID: `arxiv-crawler`
 - Manifest/integration contract: 1
+
+This record describes the `v0.2.0` provider baseline. The schema-v1 candidate
+contract remains available as a compatibility CLI, but the Flask presentation
+and variable Studio command surface were superseded by the native application
+and fixed bundled `status --json` helper documented in
+[`../cross-repo-transition.md`](../cross-repo-transition.md).
 
 ## Product boundary
 
