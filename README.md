@@ -86,6 +86,11 @@ The Flask UI remains intentionally unchanged at this stage:
 
 The new `serve` command binds to `127.0.0.1:8080` with debug disabled unless explicitly overridden. The UI is not a provider API; Studio consumes only the CLI JSON contract.
 
+Gnaroshi Studio may start this same loopback-only `serve` entrypoint as an
+app-owned local UI and open it in the user's browser. Studio owns that child
+process and stops it when Studio exits; the standalone `arxiv-discovery serve`
+workflow remains unchanged.
+
 ## Development
 
 ```bash

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "arxiv-discovery"
-version = "0.2.0"
+version = "0.3.0"
 description = "Discover recent arXiv papers and review them through a local Flask application."
 readme = "README.md"
 requires-python = ">=3.11"

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "arxiv-crawler",
-  "displayName": "Arxiv Crawler",
+  "displayName": "Arxiv Discovery",
   "repository": "Gnaroshi/Arxiv-newest-paper-crawler",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "platforms": ["macos", "linux"],
   "kind": "application",
   "bundleId": "",
@@ -13,7 +13,8 @@
     "export-candidates",
     "send-to-paperflow",
     "send-to-paper-lab",
-    "open-arxiv-paper"
+    "open-arxiv-paper",
+    "launch-discovery"
   ],
   "entrypoints": {
     "app": {},
