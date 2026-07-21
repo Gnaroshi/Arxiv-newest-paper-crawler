@@ -230,7 +230,7 @@ def test_version_and_recent_activity_are_versioned_bounded_and_path_free(
     build = version()
     recent = recent_activity(settings, limit=1)
     serialized = json.dumps(recent)
-    assert build["data"]["version"] == "0.3.0"
+    assert build["data"]["version"] == "0.4.0"
     assert set(build["data"]["build"]) == {"commit", "number", "dirty"}
     assert recent["capability"] == "recent-activity"
     assert recent["data"]["activityCount"] == 1

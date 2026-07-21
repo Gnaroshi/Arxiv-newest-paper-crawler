@@ -1,6 +1,24 @@
 # Arxiv newest paper crawler
 
-Discover recent arXiv papers, optionally translate or download explicitly selected content, and review saved results through the existing local Flask UI. The installable provider is `arxiv-discovery`; the historical `main.py` workflow remains available.
+Discover recent arXiv papers, optionally translate or download explicitly selected content, and review candidates in a native macOS app or the existing local Flask UI. The installable provider is `arxiv-discovery`; the historical `main.py` workflow remains available.
+
+## Native macOS app
+
+Arxiv Discovery 0.4.0 adds an independently runnable SwiftUI app. It fetches recent arXiv metadata, filters candidates, shows abstracts, and opens a selected paper on arXiv. Its discovery action never downloads PDFs, translates content, or writes another application's data.
+
+Build a signed local copy with:
+
+```bash
+apps/ArxivDiscoveryApp/scripts/package_macos_app.sh
+```
+
+The explicit local installer places the native app in `~/Applications` and refreshes the CLI provider:
+
+```bash
+scripts/install_local.sh
+```
+
+The Flask UI remains available through `arxiv-discovery serve` for legacy and cross-platform workflows. Studio opens the verified native macOS app and does not start the Flask UI in a browser.
 
 ## Setup
 
@@ -86,10 +104,8 @@ The Flask UI remains intentionally unchanged at this stage:
 
 The new `serve` command binds to `127.0.0.1:8080` with debug disabled unless explicitly overridden. The UI is not a provider API; Studio consumes only the CLI JSON contract.
 
-Gnaroshi Studio may start this same loopback-only `serve` entrypoint as an
-app-owned local UI and open it in the user's browser. Studio owns that child
-process and stops it when Studio exits; the standalone `arxiv-discovery serve`
-workflow remains unchanged.
+The standalone loopback-only `serve` workflow remains unchanged. It is no longer
+the primary macOS launch target when the signed Arxiv Discovery app is installed.
 
 ## Development
 
@@ -97,4 +113,5 @@ workflow remains unchanged.
 uv run pytest
 uv run ruff check .
 uv run python -m build
+swift run --package-path apps/ArxivDiscoveryApp ArxivDiscoveryCoreCheck
 ```

@@ -10,6 +10,8 @@
 
 The crawler remains the independently runnable owner of arXiv discovery, optional translation, optional PDF downloads, favorites, cached candidates, and the Flask browser. Studio coordinates discovery, filtering, status, launch, and preview handoff. PaperFlow owns Zotero/import planning. Paper Lab owns private authoring and queue records.
 
+Version 0.4.0 adds a separate SwiftUI macOS application for interactive candidate review. The native app and CLI share the metadata-only safety boundary but remain independent entry points. The Flask UI and legacy commands stay available; Studio opens the signed native bundle instead of treating a browser page as a desktop app.
+
 No repository imports crawler source or reads its internal JSON directly.
 
 ## Preserved functionality
@@ -40,7 +42,7 @@ No repository imports crawler source or reads its internal JSON directly.
 
 ## Compatibility and migration
 
-- Provider version `0.2.0` supports manifest schema 1, integration contract 1, health/recent activity contract 1, and Studio `>=0.1.0 <1.0.0`.
+- Provider version `0.4.0` supports manifest schema 1, integration contract 1, health/recent activity contract 1, and Studio `>=0.1.0 <1.0.0`.
 - Producer-first is preferred. New Studio with an old crawler shows setup/unavailable. New crawler without Studio remains fully usable.
 - Studio invokes only `arxiv-discovery discover --json --download=none`, fixed doctor/export operations, local candidate filtering, preview handoffs, and validated arXiv URLs.
 - Candidate fields are additive within contract 1. Unknown contract majors fail closed.

@@ -54,3 +54,4 @@ Desktop.ini
 /data/*.bak
 /data/*.tmp
 /robot/
+/apps/ArxivDiscoveryApp/.build/

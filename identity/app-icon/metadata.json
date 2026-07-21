@@ -5,7 +5,7 @@
   "exportedAt": "2026-07-14",
   "masterSize": "2048x2048",
   "productionSizes": [32, 64, 128, 180],
-  "targetPlatforms": ["Flask web UI", "Gnaroshi Studio managed-app card"],
+  "targetPlatforms": ["macOS native app", "Flask web UI", "Gnaroshi Studio managed-app card"],
   "ownerApproved": true,
-  "nativeApplicationIcon": false
+  "nativeApplicationIcon": true
 }
