@@ -55,3 +55,6 @@ Desktop.ini
 /data/*.tmp
 /robot/
 /apps/ArxivDiscoveryApp/.build/
+/ArxivDiscoveryApp/.build/
+/ArxivDiscoveryApp/dist/
+/identity/app-icon/AppIcon.iconset/

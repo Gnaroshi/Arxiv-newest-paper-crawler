@@ -4,15 +4,15 @@ Discover recent arXiv papers, optionally translate or download explicitly select
 
 ## Native macOS app
 
-Arxiv Discovery 0.4.0 adds an independently runnable SwiftUI app. It fetches recent arXiv metadata, filters candidates, shows abstracts, and opens a selected paper on arXiv. Its discovery action never downloads PDFs, translates content, or writes another application's data.
+Arxiv Discovery 0.4.0 adds an independently runnable SwiftUI app. It fetches recent arXiv metadata, filters and saves candidates, supports explicit per-paper translation and PDF download, and keeps triage state in its own Application Support directory. Discovery itself never downloads PDFs, translates content, or writes another application's data.
 
 Build a signed local copy with:
 
 ```bash
-apps/ArxivDiscoveryApp/scripts/package_macos_app.sh
+ArxivDiscoveryApp/build_app.sh
 ```
 
-The explicit local installer places the native app in `~/Applications` and refreshes the CLI provider:
+The explicit local installer updates the stable `/Applications/Arxiv Discovery.app` bundle and refreshes the CLI provider:
 
 ```bash
 scripts/install_local.sh
@@ -113,5 +113,5 @@ the primary macOS launch target when the signed Arxiv Discovery app is installed
 uv run pytest
 uv run ruff check .
 uv run python -m build
-swift run --package-path apps/ArxivDiscoveryApp ArxivDiscoveryCoreCheck
+swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks
 ```

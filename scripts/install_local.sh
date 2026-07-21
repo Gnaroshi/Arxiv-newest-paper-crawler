@@ -2,9 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-TARGET="$HOME/Applications/Arxiv Discovery.app"
-
-if pgrep -x "Arxiv Discovery" >/dev/null 2>&1; then
+if pgrep -x "ArxivDiscovery" >/dev/null 2>&1 || pgrep -x "Arxiv Discovery" >/dev/null 2>&1; then
   echo "Quit Arxiv Discovery before replacing its signed application bundle." >&2
   exit 3
 fi
@@ -17,5 +15,6 @@ fi
 UV="$(command -v uv || true)"
 [[ -n "$UV" ]] || { echo "uv is required to install the arxiv-discovery provider." >&2; exit 2; }
 "$UV" tool install --force "$ROOT"
-"$ROOT/apps/ArxivDiscoveryApp/scripts/package_macos_app.sh" "$TARGET"
+SIGNING_MODE=development "$ROOT/ArxivDiscoveryApp/build_app.sh"
+SKIP_BUILD=1 INSTALL_ROOT="/Applications" "$ROOT/ArxivDiscoveryApp/install_app.sh"
 echo "Installed the current signed Arxiv Discovery app and CLI provider."

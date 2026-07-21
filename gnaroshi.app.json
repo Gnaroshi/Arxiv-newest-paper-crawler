@@ -6,7 +6,7 @@
   "version": "0.4.0",
   "platforms": ["macos", "linux"],
   "kind": "application",
-  "bundleId": "dev.gnaroshi.arxiv-discovery",
+  "bundleId": "dev.gnaroshi.ArxivDiscovery",
   "dataOwner": "arxiv-crawler",
   "capabilities": [
     "discover-papers",
@@ -14,11 +14,12 @@
     "send-to-paperflow",
     "send-to-paper-lab",
     "open-arxiv-paper",
-    "launch-discovery"
+    "launch-discovery",
+    "backup-export"
   ],
   "entrypoints": {
     "app": {
-      "bundleId": "dev.gnaroshi.arxiv-discovery",
+      "bundleId": "dev.gnaroshi.ArxivDiscovery",
       "displayName": "Arxiv Discovery",
       "version": "0.4.0",
       "discovery": "bundle-id"
@@ -34,7 +35,7 @@
     "deepLinks": []
   },
   "health": { "contractVersion": 1, "timeoutMs": 3000, "freshnessSeconds": 86400 },
-  "icon": { "kind": "system", "name": "scan-search" },
+  "icon": { "kind": "application", "name": "AppIcon" },
   "privacy": {
     "classification": "private-summary",
     "credentials": "provider-owned",
