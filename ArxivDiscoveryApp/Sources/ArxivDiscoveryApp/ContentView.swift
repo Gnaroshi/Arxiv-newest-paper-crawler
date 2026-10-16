@@ -206,9 +206,9 @@ struct ContentView: View {
                     emptyState
                 } else if model.filteredPapers.isEmpty {
                     ContentUnavailableView(
-                        "Nothing here",
+                        model.scope == .excluded ? "Trash is empty" : "No matching papers",
                         systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text("Try another library view or search.")
+                        description: Text(model.scope == .excluded ? "Removed papers appear here until you restore or delete their metadata." : "Try another library view or search.")
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {

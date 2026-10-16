@@ -13,7 +13,7 @@ struct CleanupView: View {
             ScrollView {
                 DiscoveryScopeControls(settings: settings).topicSelection
                     .disabled(model.isDiscovering || model.isCleaning)
-            }.frame(maxHeight: 130)
+            }.frame(height: min(130, CGFloat((settings.researchTopics.count + 1) / 2) * 26 + 36))
             HStack {
                 Button { model.previewCleanup() } label: { Label("Refresh preview", systemImage: "arrow.clockwise") }
                     .disabled(settings.selectedTopics.isEmpty || model.isCleaning || model.isDiscovering)
@@ -27,12 +27,19 @@ struct CleanupView: View {
                     GridRow { Text("Move to Trash").bold(); Text("\(preview.candidates.count)").bold().monospacedDigit() }
                 }
                 Divider()
-                List(preview.candidates) { candidate in
+                if preview.candidates.isEmpty {
+                    VStack(spacing: 8) {
+                        Label("All caught up", systemImage: "checkmark.circle").font(.headline).foregroundStyle(AppTheme.teal)
+                        Text("No unrelated, unread papers need to be removed.").font(.callout).foregroundStyle(.secondary)
+                    }.frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                  List(preview.candidates) { candidate in
                     VStack(alignment: .leading, spacing: 4) {
                         Text(candidate.title).font(.body.weight(.medium))
                         Text(candidate.reason).font(.caption).foregroundStyle(.secondary)
                     }.padding(.vertical, 4)
-                }.listStyle(.inset)
+                  }.listStyle(.inset)
+                }
             } else {
                 ContentUnavailableView("Preview cleanup", systemImage: "line.3.horizontal.decrease.circle", description: Text("Select topics to keep, then refresh the preview."))
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
