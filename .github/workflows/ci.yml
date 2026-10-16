@@ -1,9 +1,8 @@
 name: Validate native application
 
 on:
-  pull_request:
-  push:
-    branches: [main]
+  # Run only after the owner explicitly authorizes GitHub Actions.
+  workflow_dispatch:
 
 permissions:
   contents: read

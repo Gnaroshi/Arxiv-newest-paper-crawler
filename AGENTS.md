@@ -23,6 +23,8 @@
 
 ## Verification
 
+- Do not use GitHub Actions until the owner explicitly authorizes it. Git push, PR creation, and release requests are not permission to run Actions. Keep this workflow manual-only and perform checks locally.
+
 ```bash
 uv run pytest
 uv run ruff check .
