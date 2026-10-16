@@ -190,7 +190,8 @@ public struct PaperRepository: Sendable {
         _ papers: [Paper],
         library: LibraryState,
         retentionDays: Int,
-        now: Date = Date()
+        now: Date = Date(),
+        excludedIDs: Set<String> = []
     ) -> [Paper] {
         let calendar = DiscoveryDate.calendar
         let publicationCutoff = calendar.date(byAdding: .day, value: -max(retentionDays, 30), to: now) ?? now
@@ -203,7 +204,7 @@ public struct PaperRepository: Sendable {
                 || paper.abstractKO?.isEmpty == false
             let recentlyPublished = paper.publishedAt >= publicationCutoff
             let recentlyFetched = (paper.crawledAt ?? .distantPast) >= recentFetchCutoff
-            return userOwned || recentlyPublished || recentlyFetched
+            return userOwned || excludedIDs.contains(paper.shortID) || recentlyPublished || recentlyFetched
         }
     }
 
@@ -214,7 +215,8 @@ public struct PaperRepository: Sendable {
             papers: loadPapers(),
             library: loadLibraryState(),
             discoveryHistory: loadDiscoveryHistory(),
-            translationUsage: loadTranslationUsage()
+            translationUsage: loadTranslationUsage(),
+            cleanupState: loadCleanupState()
         )
     }
 

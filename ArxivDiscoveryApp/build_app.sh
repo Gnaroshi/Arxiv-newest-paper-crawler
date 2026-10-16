@@ -5,6 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT_DIR"
 
+if [[ -z "${DEVELOPER_DIR:-}" && -d /Applications/Xcode.app/Contents/Developer ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+fi
+
 uv run python tools/build_app_icon.py
 swift build -c release --package-path "$SCRIPT_DIR"
 
@@ -24,6 +28,7 @@ rm -rf "$APP_DIR"
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
 cp "$SCRIPT_DIR/.build/release/ArxivDiscoveryApp" "$MACOS_DIR/ArxivDiscovery"
 cp "$SCRIPT_DIR/.build/release/ArxivDiscoveryIntegration" "$MACOS_DIR/ArxivDiscoveryIntegration"
+cp "$SCRIPT_DIR/.build/release/ArxivDiscoveryMaintenance" "$MACOS_DIR/ArxivDiscoveryMaintenance"
 cp "$INFO_PLIST" "$CONTENTS_DIR/Info.plist"
 cp "$ROOT_DIR/identity/app-icon/AppIcon.icns" "$RESOURCES_DIR/AppIcon.icns"
 cp "$ROOT_DIR/gnaroshi.app.json" "$RESOURCES_DIR/gnaroshi.app.json"
@@ -52,7 +57,7 @@ pathlib.Path(path).write_text(
 )
 PY
 
-chmod +x "$MACOS_DIR/ArxivDiscovery" "$MACOS_DIR/ArxivDiscoveryIntegration"
+chmod +x "$MACOS_DIR/ArxivDiscovery" "$MACOS_DIR/ArxivDiscoveryIntegration" "$MACOS_DIR/ArxivDiscoveryMaintenance"
 SIGNING_MODE="${SIGNING_MODE:-development}"
 if [[ "$SIGNING_MODE" == "release" && "$GIT_DIRTY" == "true" ]]; then
   echo "Release packaging requires a clean tagged checkout." >&2
@@ -80,6 +85,7 @@ if [[ "$SIGNING_MODE" == "release" && "$SIGNING_IDENTITY" != Developer\ ID\ Appl
 fi
 
 codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$MACOS_DIR/ArxivDiscoveryIntegration"
+codesign --force --timestamp --options runtime --sign "$SIGNING_IDENTITY" "$MACOS_DIR/ArxivDiscoveryMaintenance"
 codesign --force --timestamp --options runtime --entitlements "$ENTITLEMENTS" --sign "$SIGNING_IDENTITY" "$APP_DIR"
 codesign --verify --deep --strict --verbose=2 "$APP_DIR"
 

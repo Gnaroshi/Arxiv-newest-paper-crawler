@@ -7,6 +7,8 @@ The SwiftUI app is the primary interface. Python remains available for compatibi
 ## What works
 
 - Multi-date UTC discovery calendar with paper counts and searched/unsearched state
+- Separate research-topic discovery (VLA / World Models by default) and explicit broad arXiv-category discovery
+- Recoverable cleanup of unrelated unread Inbox/New papers, with preview, backup, excluded list, and undo
 - Inbox, New, Reviewed, Saved, collection, VLA, World Models, subject, and text filters
 - Persistent collections, per-paper notes, translations, and discovery history
 - Explicit per-paper PDF download
@@ -45,10 +47,28 @@ The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
 - `library.json`: Inbox/Reviewed/Saved state, collections, and notes
 - `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
 - `translation-usage.json`: app-local Gemini request and token totals
+- `cleanup-state.json`: recoverable exclusions; original paper metadata and reading state remain intact
+- `Backups/cleanup-*/`: snapshots written before cleanup or restore
 - `status.json`: safe count and freshness summary for read-only integration
 - `PDFs/`: PDFs downloaded by explicit action
 
 Use the app Import command to merge an older `data/papers.json`. When a sibling `favorites.json` exists, favorites are imported too. Source files are never modified.
+
+## Topic Discovery and Cleanup
+
+In Calendar, choose **연구 주제** to fetch only VLA / World Models papers for the selected dates. Topic matching uses titles and abstracts, including robotics context for the VLA acronym. **arXiv 분야 태그** is a separate, explicitly broad mode that fetches entire selected categories. Changing mode or topics invalidates the previous calendar coverage for that date.
+
+Open **라이브러리 정리** to preview unrelated unread Inbox papers, then choose **관련 없는 논문 제외**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Excluded papers disappear from normal library views and remain available in **제외됨**. Restore one paper there, or choose **최근 정리 되돌리기** to undo the latest batch. Original metadata, PDF files, favorites and notes are not deleted.
+
+For local maintenance while the app is closed:
+
+```bash
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" cleanup
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" cleanup --apply
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" restore --apply
+```
+
+The maintenance command operates on the native app library and defaults to a read-only preview. The Python compatibility CLI continues to use its separately configured data directory.
 
 ## Optional Gemini translation
 

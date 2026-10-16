@@ -162,7 +162,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
     }
 }
 
-public enum SmartTopic: String, CaseIterable, Identifiable, Sendable {
+public enum SmartTopic: String, Codable, CaseIterable, Identifiable, Sendable {
     case vla
     case worldModels
 
@@ -176,17 +176,6 @@ public enum SmartTopic: String, CaseIterable, Identifiable, Sendable {
     }
 
     public func matches(_ paper: Paper) -> Bool {
-        let text = "\(paper.title) \(paper.abstract)".lowercased()
-        switch self {
-        case .vla:
-            return text.contains("vision-language-action")
-                || text.contains("vision language action")
-                || text.range(of: #"\bvla(s)?\b"#, options: .regularExpression) != nil
-        case .worldModels:
-            return text.contains("world model")
-                || text.contains("world-model")
-                || text.contains("world action model")
-                || text.contains("video world model")
-        }
+        evidence(in: paper) != nil
     }
 }

@@ -145,6 +145,7 @@ func checkFilenameAndCache() throws {
     let repository = PaperRepository(rootURL: try temporaryDirectory())
     try require(repository.prunedPapers([oldPaper], library: library, retentionDays: 60, now: now).count == 1, "Notes should protect a paper from cache pruning.")
     try require(repository.prunedPapers([oldPaper], library: LibraryState(), retentionDays: 60, now: now).isEmpty, "Unowned expired papers should be pruned.")
+    try require(repository.prunedPapers([oldPaper], library: LibraryState(), retentionDays: 60, now: now, excludedIDs: [oldPaper.shortID]).count == 1, "Excluded papers must remain recoverable after discovery cache pruning.")
 }
 
 func checkBackupSnapshot() throws {
@@ -162,6 +163,63 @@ func checkBackupSnapshot() throws {
     let encoded = try repository.encodedBackupSnapshot(applicationVersion: "0.4.0")
     let text = String(decoding: encoded, as: UTF8.self)
     try require(!text.contains("gemini-api-key") && !text.contains("/PDFs/"), "Backup should omit credentials and PDF paths.")
+}
+
+func checkTopicDiscovery() throws {
+    let interval = try requireValue(DiscoveryDate.interval(for: "2026-10-01"), "Valid interval")
+    let query = DiscoveryQuery(interval: interval)
+    let expression = try requireValue(query.searchExpression, "Topic query should exist")
+    try require(expression.contains("ti:"), "Topics must filter the remote title/abstract query.")
+    try require(!expression.contains("cat:"), "Topic discovery should not collect entire subject categories.")
+    let broad = DiscoveryQuery(interval: interval, categories: ["cs.RO"], mode: .categories)
+    try require(broad.searchExpression?.contains("cat:cs.RO") == true, "Subject collection must remain an explicit separate mode.")
+    try require(DiscoveryQuery(interval: interval, topics: []).searchExpression == nil, "Empty topics must never fall back to broad discovery.")
+    try require(query.accepts(paper(abstract: "We introduce a vision-language-action model for robotics.", translation: nil)), "VLA should match.")
+    try require(query.accepts(paper(abstract: "Learning latent world modelling for simulation.", translation: nil)), "World modelling variants should match.")
+    try require(!query.accepts(paper(abstract: "VLA radio observations of galaxies.", translation: nil)), "The Very Large Array acronym is not robotics VLA.")
+    try require(!query.accepts(paper(abstract: "A new image classification loss.", translation: nil)), "Unrelated CV should not enter topic discovery.")
+    let legacy = DiscoveryDayRecord(day: "2026-10-01", lastSearchedAt: Date(), paperCount: 500, categories: ["cs.RO"], isComplete: false)
+    try require(!legacy.covers(mode: .topics, categories: ["cs.RO"], topics: Set(SmartTopic.allCases)), "Historical subject searches must not mark topics as already searched.")
+}
+
+func checkRecoverableCleanup() throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let repository = PaperRepository(rootURL: root)
+    func fixture(_ id: String, _ abstract: String = "Unrelated graph theorem") -> Paper {
+        var value = paper(abstract: abstract, translation: nil)
+        value.shortID = id
+        value.title = id
+        return value
+    }
+    var translated = fixture("translated")
+    translated.abstractKO = "보관할 번역"
+    let values = [fixture("unrelated"), fixture("vla", "vision-language-action robot model"), fixture("saved"), fixture("viewed"), fixture("reviewed"), fixture("note"), fixture("pdf"), translated]
+    var library = LibraryState()
+    library.setSaved(true, paperID: "saved")
+    library.markViewed("viewed")
+    library.markReviewed("reviewed")
+    library.setNote("Keep my work", paperID: "note")
+    try repository.savePapers(values)
+    try repository.saveLibraryState(library)
+    try FileManager.default.createDirectory(at: repository.pdfsURL, withIntermediateDirectories: true)
+    let downloaded = repository.pdfURL(for: values[6], style: .title)
+    try Data("preserved PDF".utf8).write(to: downloaded)
+    let papersBefore = try Data(contentsOf: repository.papersURL)
+    let libraryBefore = try Data(contentsOf: repository.libraryURL)
+    let preview = try repository.previewTopicCleanup(topics: SmartTopic.allCases)
+    try require(preview.candidates.map(\.paperID) == ["unrelated"], "Only unrelated, unread, unowned Inbox papers should be excluded.")
+    try require(preview.protectedCount == 6, "Saved/viewed/reviewed/notes/PDFs/translations should all be protected.")
+    try require(!FileManager.default.fileExists(atPath: repository.cleanupStateURL.path), "Preview must not mutate state.")
+    let result = try repository.applyTopicCleanup(topics: SmartTopic.allCases, applicationVersion: "test")
+    try require(result.excludedCount == 1, "Cleanup should apply the preview.")
+    try require(FileManager.default.fileExists(atPath: result.backupPath + "/papers.json"), "Backup must exist before exclusion state is committed.")
+    try require(try Data(contentsOf: repository.papersURL) == papersBefore, "All original metadata must remain byte-identical.")
+    try require(try Data(contentsOf: repository.libraryURL) == libraryBefore, "All reading state must remain byte-identical.")
+    try require(try repository.previewTopicCleanup(topics: SmartTopic.allCases).candidates.isEmpty, "Repeated cleanup must be idempotent.")
+    try require(try repository.restoreLastTopicCleanup() == 1, "Undo should restore the last batch.")
+    try require(try repository.loadCleanupState().excluded.isEmpty, "Undo should remove the exclusions.")
+    try require(try Data(contentsOf: downloaded) == Data("preserved PDF".utf8), "Cleanup and undo must preserve PDFs.")
 }
 
 func requireValue<T>(_ value: T?, _ message: String) throws -> T {
@@ -185,7 +243,9 @@ do {
     try checkDiscoveryHistory()
     try checkFilenameAndCache()
     try checkBackupSnapshot()
-    print("ArxivDiscoveryCoreChecks passed (7 checks).")
+    try checkTopicDiscovery()
+    try checkRecoverableCleanup()
+    print("ArxivDiscoveryCoreChecks passed (9 checks).")
 } catch {
     FileHandle.standardError.write(Data("ArxivDiscoveryCoreChecks failed: \(error)\n".utf8))
     exit(EXIT_FAILURE)

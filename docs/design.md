@@ -10,6 +10,8 @@ The main window answers five questions without opening another screen: what the 
 - Candidate column: status, bounded time-window control, search, and paper rows.
 - Detail column: one selected paper with metadata, abstract, and explicit actions.
 - Settings: Gemini key and model information separated from data-folder commands.
+- Calendar has an explicit collection scope: research topics (default VLA + World Models) or broad arXiv subject tags. Topic browsing in the sidebar and the remote collection scope are distinct controls.
+- Cleanup presents counts, a preview list, protected work, and a single recoverable apply action. Excluded metadata remains in a separate library view with individual restore and last-batch undo.
 
 The minimum window is 900×620. Text wraps before controls compress. The candidate and detail columns remain independently scrollable.
 

@@ -6,19 +6,28 @@ public struct DiscoveryDayRecord: Codable, Equatable, Identifiable, Sendable {
     public var paperCount: Int
     public var categories: [String]
     public var isComplete: Bool
+    public var mode: DiscoveryMode?
+    public var topics: [SmartTopic]?
 
     public var id: String { day }
 
-    public init(day: String, lastSearchedAt: Date, paperCount: Int, categories: [String], isComplete: Bool) {
+    public init(day: String, lastSearchedAt: Date, paperCount: Int, categories: [String], isComplete: Bool, mode: DiscoveryMode = .categories, topics: [SmartTopic] = []) {
         self.day = day
         self.lastSearchedAt = lastSearchedAt
         self.paperCount = paperCount
         self.categories = categories.sorted()
         self.isComplete = isComplete
+        self.mode = mode
+        self.topics = topics.sorted { $0.rawValue < $1.rawValue }
     }
 
     public func covers(categories expected: Set<String>) -> Bool {
-        Set(categories) == expected
+        (mode ?? .categories) == .categories && Set(categories) == expected
+    }
+
+    public func covers(mode expectedMode: DiscoveryMode, categories expectedCategories: Set<String>, topics expectedTopics: Set<SmartTopic>) -> Bool {
+        guard (mode ?? .categories) == expectedMode else { return false }
+        return expectedMode == .topics ? Set(topics ?? []) == expectedTopics : Set(categories) == expectedCategories
     }
 }
 

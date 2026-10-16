@@ -9,6 +9,7 @@ public struct ArxivBackupSnapshot: Codable, Equatable, Sendable {
     public var library: LibraryState
     public var discoveryHistory: DiscoveryHistory
     public var translationUsage: TranslationUsageLedger
+    public var cleanupState: TopicCleanupState?
 
     public init(
         schemaVersion: Int = 1,
@@ -18,7 +19,8 @@ public struct ArxivBackupSnapshot: Codable, Equatable, Sendable {
         papers: [Paper],
         library: LibraryState,
         discoveryHistory: DiscoveryHistory,
-        translationUsage: TranslationUsageLedger
+        translationUsage: TranslationUsageLedger,
+        cleanupState: TopicCleanupState? = nil
     ) {
         self.schemaVersion = schemaVersion
         self.applicationID = applicationID
@@ -28,6 +30,7 @@ public struct ArxivBackupSnapshot: Codable, Equatable, Sendable {
         self.library = library
         self.discoveryHistory = discoveryHistory
         self.translationUsage = translationUsage
+        self.cleanupState = cleanupState
     }
 }
 

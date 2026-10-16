@@ -31,6 +31,14 @@ final class AppSettings: ObservableObject {
     static let categories = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.RO", "cs.NE", "stat.ML"]
     static let defaultGeminiModel = "gemini-3.5-flash"
 
+    @Published var discoveryMode: DiscoveryMode {
+        didSet { UserDefaults.standard.set(discoveryMode.rawValue, forKey: "discoveryMode") }
+    }
+
+    @Published var enabledTopics: Set<SmartTopic> {
+        didSet { UserDefaults.standard.set(enabledTopics.map(\.rawValue).sorted(), forKey: "enabledTopics") }
+    }
+
     @Published var enabledCategories: Set<String> {
         didSet { UserDefaults.standard.set(enabledCategories.sorted(), forKey: "enabledCategories") }
     }
@@ -52,6 +60,9 @@ final class AppSettings: ObservableObject {
     }
 
     init() {
+        discoveryMode = DiscoveryMode(rawValue: UserDefaults.standard.string(forKey: "discoveryMode") ?? "") ?? .topics
+        let storedTopics = UserDefaults.standard.stringArray(forKey: "enabledTopics")
+        enabledTopics = storedTopics.map { Set($0.compactMap(SmartTopic.init(rawValue:))) } ?? Set(SmartTopic.allCases)
         let storedCategories = UserDefaults.standard.stringArray(forKey: "enabledCategories") ?? []
         enabledCategories = storedCategories.isEmpty ? Set(Self.categories) : Set(storedCategories)
         appearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system

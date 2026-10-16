@@ -22,16 +22,8 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("Subjects") {
-                ForEach(AppSettings.categories, id: \.self) { category in
-                    Toggle(category, isOn: Binding(
-                        get: { settings.enabledCategories.contains(category) },
-                        set: { enabled in
-                            if enabled { settings.enabledCategories.insert(category) }
-                            else if settings.enabledCategories.count > 1 { settings.enabledCategories.remove(category) }
-                        }
-                    ))
-                }
+            Section("논문 가져오기") {
+                DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
             }
 
             Section("Korean translation") {

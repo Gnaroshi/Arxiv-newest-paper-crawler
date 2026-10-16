@@ -82,8 +82,13 @@ struct ContentView: View {
                         .badge(model.reviewedCount)
                         .tag(LibraryScope.reviewed)
                     Label("All papers", systemImage: "tray.full")
-                        .badge(model.papers.count)
+                        .badge(model.activePapers.count)
                         .tag(LibraryScope.all)
+                    Label("라이브러리 정리", systemImage: "line.3.horizontal.decrease.circle")
+                        .tag(LibraryScope.cleanup)
+                    Label("제외됨", systemImage: "archivebox")
+                        .badge(model.excludedCount)
+                        .tag(LibraryScope.excluded)
                 }
 
                 Section {
@@ -111,7 +116,7 @@ struct ContentView: View {
                 }
 
                 if !model.observedSubjects.isEmpty {
-                    Section("Subjects") {
+                    Section("arXiv 분야 태그") {
                         ForEach(model.observedSubjects, id: \.self) { subject in
                             Label(subject, systemImage: "number")
                                 .tag(LibraryScope.subject(subject))
@@ -157,6 +162,8 @@ struct ContentView: View {
     private var candidateColumn: some View {
         if model.scope == .calendar {
             DiscoveryCalendarView(model: model, settings: settings)
+        } else if model.scope == .cleanup {
+            CleanupView(model: model, settings: settings)
         } else {
             VStack(spacing: 0) {
                 listHeader
@@ -191,11 +198,15 @@ struct ContentView: View {
                         )
                         .tag(paper.shortID)
                         .contextMenu {
+                          if model.scope == .excluded {
+                            Button("Inbox에 복구") { model.restoreExcluded(paper) }
+                          } else {
                             Button(model.favorites.contains(paper.shortID) ? "Remove from Saved" : "Save for later") {
                                 model.toggleSaved(paper)
                             }
                             Button("Mark as reviewed") { model.markReviewed(paper) }
                             Button("Move to Inbox") { model.moveToInbox(paper) }
+                          }
                             Divider()
                             Button("Open on arXiv") { model.openPaper(paper) }
                         }
@@ -242,15 +253,27 @@ struct ContentView: View {
 
     @ViewBuilder
     private var detailColumn: some View {
-        if model.scope == .calendar {
+        if model.scope == .cleanup {
+            ContentUnavailableView("보관·읽기 기록 보호", systemImage: "checkmark.shield", description: Text("정리 후에는 제외됨 목록에서 논문을 복구할 수 있습니다."))
+        } else if model.scope == .calendar {
             ContentUnavailableView(
                 "Select dates",
                 systemImage: "calendar.badge.clock",
                 description: Text("Searched dates show their paper count and last search time.")
             )
         } else if let paper = model.selectedPaper {
+          VStack(spacing: 0) {
+            if model.scope == .excluded {
+                HStack {
+                    Text("New·Inbox에서 제외된 논문").font(.caption)
+                    Spacer()
+                    Button("Inbox에 복구") { model.restoreExcluded(paper) }
+                }.padding(12)
+                Divider()
+            }
             PaperDetailView(model: model, paper: paper)
                 .id(paper.shortID + (paper.abstractKO ?? "") + model.progress(for: paper).note)
+          }
         } else {
             ContentUnavailableView(
                 "Select a paper",
@@ -284,6 +307,8 @@ struct ContentView: View {
         case .calendar: "Discovery calendar"
         case .all: "All papers"
         case let .subject(subject): subject
+        case .cleanup: "라이브러리 정리"
+        case .excluded: "제외됨"
         }
     }
 }

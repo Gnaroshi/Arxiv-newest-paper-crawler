@@ -9,6 +9,7 @@ let package = Package(
         .library(name: "ArxivDiscoveryCore", targets: ["ArxivDiscoveryCore"]),
         .executable(name: "ArxivDiscoveryApp", targets: ["ArxivDiscoveryApp"]),
         .executable(name: "ArxivDiscoveryIntegration", targets: ["ArxivDiscoveryIntegration"]),
+        .executable(name: "ArxivDiscoveryMaintenance", targets: ["ArxivDiscoveryMaintenance"]),
         .executable(name: "ArxivDiscoveryCoreChecks", targets: ["ArxivDiscoveryCoreChecks"])
     ],
     targets: [
@@ -25,6 +26,11 @@ let package = Package(
             name: "ArxivDiscoveryIntegration",
             dependencies: ["ArxivDiscoveryCore"],
             path: "Sources/ArxivDiscoveryIntegration"
+        ),
+        .executableTarget(
+            name: "ArxivDiscoveryMaintenance",
+            dependencies: ["ArxivDiscoveryCore"],
+            path: "Sources/ArxivDiscoveryMaintenance"
         ),
         .executableTarget(
             name: "ArxivDiscoveryCoreChecks",

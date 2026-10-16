@@ -7,10 +7,13 @@ struct DiscoveryCalendarView: View {
     @ObservedObject var settings: AppSettings
     @State private var visibleMonth = Self.startOfMonth(Date())
 
-    private let columns = Array(repeating: GridItem(.flexible(minimum: 72), spacing: 8), count: 7)
+    private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 16) {
+            DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
+            Divider()
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Discovery calendar")
@@ -31,7 +34,7 @@ struct DiscoveryCalendarView: View {
             }
 
             LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(DiscoveryDate.calendar.veryShortWeekdaySymbols, id: \.self) { weekday in
+                ForEach(Array(DiscoveryDate.calendar.veryShortWeekdaySymbols.enumerated()), id: \.offset) { _, weekday in
                     Text(weekday)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
@@ -47,7 +50,8 @@ struct DiscoveryCalendarView: View {
                 }
             }
 
-            HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 12) {
+              HStack {
                 Button("Select unsearched") { selectUnsearchedMonth() }
                     .disabled(unsearchedMonthKeys.isEmpty || model.isDiscovering)
                 Button("Clear") { model.selectedDiscoveryDays.removeAll() }
@@ -56,39 +60,42 @@ struct DiscoveryCalendarView: View {
                 Text("\(model.selectedDiscoveryDays.count) selected")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+              }
                 Button {
                     model.searchSelectedDates()
                 } label: {
                     if model.isDiscovering {
                         Label("Searching…", systemImage: "hourglass")
                     } else {
-                        Label("Search selected dates", systemImage: "magnifyingglass")
+                        Label(settings.discoveryMode == .topics ? "선택한 날짜의 주제 논문 가져오기" : "선택한 날짜의 분야 전체 가져오기", systemImage: "magnifyingglass")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-                .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled)
+                .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled || (settings.discoveryMode == .topics ? settings.enabledTopics.isEmpty : settings.enabledCategories.isEmpty))
             }
 
             HStack(spacing: 18) {
                 legend(color: AppTheme.teal, text: "Searched")
-                legend(color: AppTheme.orange, text: "Search again for current subjects")
+                legend(color: AppTheme.orange, text: "검색 기준 변경됨")
                 legend(color: .secondary, text: "Not searched")
             }
             .font(.caption)
+          }.padding(20)
         }
-        .padding(20)
         .background(AppTheme.canvas(for: colorScheme))
     }
 
     private func dayCell(_ date: Date) -> some View {
         let key = DiscoveryDate.key(for: date)
         let record = model.discoveryHistory.days[key]
-        let covers = record?.covers(categories: settings.enabledCategories) == true
+        let covers = record?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, topics: settings.enabledTopics) == true
         let isSelected = model.selectedDiscoveryDays.contains(key)
         let isFuture = date > Date()
-        let count = record.map { $0.isComplete ? "\($0.paperCount) papers" : "\($0.paperCount)+ papers" }
+        let count = record.map { record in
+            covers ? (record.isComplete ? "\(record.paperCount)" : "\(record.paperCount)+") : "—"
+        }
 
         return Button {
             if isSelected { model.selectedDiscoveryDays.remove(key) }
@@ -103,12 +110,12 @@ struct DiscoveryCalendarView: View {
                         .fill(statusColor(record: record, covers: covers))
                         .frame(width: 7, height: 7)
                 }
-                Text(count ?? "Not searched")
+                Text(count ?? "—")
                     .font(.caption)
                     .foregroundStyle(record == nil ? .secondary : .primary)
                     .lineLimit(1)
                 if let record {
-                    Text(covers ? record.lastSearchedAt.formatted(date: .omitted, time: .shortened) : "Subjects changed")
+                    Text(covers ? record.lastSearchedAt.formatted(date: .omitted, time: .shortened) : "재검색")
                         .font(.caption2)
                         .foregroundStyle(covers ? .secondary : AppTheme.orange)
                         .lineLimit(1)
@@ -152,7 +159,7 @@ struct DiscoveryCalendarView: View {
         Set(monthSlots.compactMap { date in
             guard let date, date <= Date() else { return nil }
             let key = DiscoveryDate.key(for: date)
-            return model.discoveryHistory.days[key]?.covers(categories: settings.enabledCategories) == true ? nil : key
+            return model.discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, topics: settings.enabledTopics) == true ? nil : key
         })
     }
 

@@ -28,6 +28,19 @@ public enum ArxivClientError: LocalizedError, Equatable {
 
 public protocol ArxivSearching {
     func discover(query: DiscoveryQuery, now: Date) async throws -> [Paper]
+    func discoverBatch(query: DiscoveryQuery, now: Date) async throws -> ArxivSearchBatch
+}
+
+public struct ArxivSearchBatch: Sendable {
+    public var papers: [Paper]
+    public var isComplete: Bool
+}
+
+public extension ArxivSearching {
+    func discoverBatch(query: DiscoveryQuery, now: Date) async throws -> ArxivSearchBatch {
+        let papers = try await discover(query: query, now: now)
+        return ArxivSearchBatch(papers: papers, isComplete: papers.count < query.maxResults)
+    }
 }
 
 public struct ArxivClient: ArxivSearching {
@@ -44,14 +57,14 @@ public struct ArxivClient: ArxivSearching {
     }
 
     public func discover(query: DiscoveryQuery, now: Date = Date()) async throws -> [Paper] {
+        try await discoverBatch(query: query, now: now).papers
+    }
+
+    public func discoverBatch(query: DiscoveryQuery, now: Date = Date()) async throws -> ArxivSearchBatch {
         guard var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false) else {
             throw ArxivClientError.invalidRequest
         }
-        let categoryQuery = query.categories.map { "cat:\($0)" }.joined(separator: " OR ")
-        let rangeStart = Self.queryDateFormatter.string(from: query.interval.start)
-        let inclusiveEnd = query.interval.end.addingTimeInterval(-60)
-        let rangeEnd = Self.queryDateFormatter.string(from: inclusiveEnd)
-        let searchQuery = "(\(categoryQuery)) AND submittedDate:[\(rangeStart) TO \(rangeEnd)]"
+        guard let searchQuery = query.searchExpression else { throw ArxivClientError.invalidRequest }
         components.queryItems = [
             URLQueryItem(name: "search_query", value: searchQuery),
             URLQueryItem(name: "start", value: "0"),
@@ -78,19 +91,13 @@ public struct ArxivClient: ArxivSearching {
         }
 
         let papers = try ArxivFeedParser.parse(data: data, crawledAt: now)
-        return papers
+        let accepted = papers
             .filter { $0.publishedAt >= query.interval.start && $0.publishedAt < query.interval.end }
+            .filter { query.accepts($0) }
             .sorted { $0.publishedAt > $1.publishedAt }
+        return ArxivSearchBatch(papers: accepted, isComplete: papers.count < query.maxResults)
     }
 
-    private static let queryDateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.calendar = DiscoveryDate.calendar
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyyMMddHHmm"
-        return formatter
-    }()
 }
 
 public enum ArxivFeedParser {
