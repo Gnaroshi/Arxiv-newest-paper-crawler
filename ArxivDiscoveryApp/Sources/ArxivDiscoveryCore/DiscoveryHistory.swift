@@ -8,10 +8,11 @@ public struct DiscoveryDayRecord: Codable, Equatable, Identifiable, Sendable {
     public var isComplete: Bool
     public var mode: DiscoveryMode?
     public var topics: [SmartTopic]?
+    public var topicSignatures: [String]?
 
     public var id: String { day }
 
-    public init(day: String, lastSearchedAt: Date, paperCount: Int, categories: [String], isComplete: Bool, mode: DiscoveryMode = .categories, topics: [SmartTopic] = []) {
+    public init(day: String, lastSearchedAt: Date, paperCount: Int, categories: [String], isComplete: Bool, mode: DiscoveryMode = .categories, topics: [SmartTopic] = [], researchTopics: [ResearchTopic]? = nil) {
         self.day = day
         self.lastSearchedAt = lastSearchedAt
         self.paperCount = paperCount
@@ -19,6 +20,7 @@ public struct DiscoveryDayRecord: Codable, Equatable, Identifiable, Sendable {
         self.isComplete = isComplete
         self.mode = mode
         self.topics = topics.sorted { $0.rawValue < $1.rawValue }
+        self.topicSignatures = researchTopics?.map(\.signature).sorted()
     }
 
     public func covers(categories expected: Set<String>) -> Bool {
@@ -28,6 +30,12 @@ public struct DiscoveryDayRecord: Codable, Equatable, Identifiable, Sendable {
     public func covers(mode expectedMode: DiscoveryMode, categories expectedCategories: Set<String>, topics expectedTopics: Set<SmartTopic>) -> Bool {
         guard (mode ?? .categories) == expectedMode else { return false }
         return expectedMode == .topics ? Set(topics ?? []) == expectedTopics : Set(categories) == expectedCategories
+    }
+
+    public func covers(mode: DiscoveryMode, categories: Set<String>, researchTopics: [ResearchTopic]) -> Bool {
+        guard (self.mode ?? .categories) == mode else { return false }
+        if mode == .categories { return Set(self.categories) == categories }
+        return topicSignatures == researchTopics.map(\.signature).sorted()
     }
 }
 

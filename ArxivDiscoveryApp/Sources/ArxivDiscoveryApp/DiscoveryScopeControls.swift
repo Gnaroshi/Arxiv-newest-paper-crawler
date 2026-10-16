@@ -3,16 +3,17 @@ import SwiftUI
 
 struct DiscoveryScopeControls: View {
     @ObservedObject var settings: AppSettings
+    @State private var managingTopics = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Picker("가져오기 기준", selection: $settings.discoveryMode) {
+            Picker("Search by", selection: $settings.discoveryMode) {
                 ForEach(DiscoveryMode.allCases) { mode in Text(mode.label).tag(mode) }
             }
             .pickerStyle(.segmented)
             if settings.discoveryMode == .topics {
                 topicSelection
-                Text("선택한 주제 중 하나가 제목·초록에 확인되는 논문만 가져옵니다.")
+                Text("Only papers matching a selected topic in the title or abstract are collected.")
                     .font(.caption).foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 90), alignment: .leading)], alignment: .leading, spacing: 8) {
@@ -26,23 +27,26 @@ struct DiscoveryScopeControls: View {
                         )).toggleStyle(.checkbox)
                     }
                 }
-                Label("분야 전체 수집: VLA·World Models 이외의 논문도 가져옵니다.", systemImage: "exclamationmark.triangle")
+                Label("Broad search: collects every paper in the selected categories, including unrelated topics.", systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(.orange)
             }
         }.fixedSize(horizontal: false, vertical: true)
     }
 
     var topicSelection: some View {
-        HStack(spacing: 20) {
-            ForEach(SmartTopic.allCases) { topic in
-                Toggle(topic.label, isOn: Binding(
-                    get: { settings.enabledTopics.contains(topic) },
+        VStack(alignment: .leading, spacing: 10) {
+          LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), alignment: .leading)], alignment: .leading, spacing: 10) {
+            ForEach(settings.researchTopics) { topic in
+                Toggle(topic.name, isOn: Binding(
+                    get: { settings.selectedTopicIDs.contains(topic.id) },
                     set: { enabled in
-                        if enabled { settings.enabledTopics.insert(topic) }
-                        else { settings.enabledTopics.remove(topic) }
+                        if enabled { settings.selectedTopicIDs.insert(topic.id) }
+                        else { settings.selectedTopicIDs.remove(topic.id) }
                     }
                 )).toggleStyle(.checkbox)
             }
-        }
+          }
+          Button { managingTopics = true } label: { Label("Find or create topics", systemImage: "slider.horizontal.3") }
+        }.sheet(isPresented: $managingTopics) { TopicManagerView(settings: settings) }
     }
 }

@@ -9,16 +9,22 @@ struct ContentView: View {
     @State private var importingLegacy = false
     @State private var creatingCollection = false
     @State private var collectionName = ""
+    @State private var managingTopics = false
+    @State private var deletingPaper: Paper?
 
     var body: some View {
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 270)
-        } content: {
-            candidateColumn
-                .navigationSplitViewColumnWidth(min: 430, ideal: 520, max: 720)
         } detail: {
-            detailColumn
+            if model.scope == .calendar || model.scope == .cleanup {
+                candidateColumn
+            } else {
+                HSplitView {
+                    candidateColumn.frame(minWidth: 340, idealWidth: 440, maxWidth: 620)
+                    detailColumn.frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
+                }
+            }
         }
         .navigationSplitViewStyle(.balanced)
         .background(AppTheme.canvas(for: colorScheme))
@@ -29,10 +35,21 @@ struct ContentView: View {
                 Menu {
                     Button("Import previous papers.json") { importingLegacy = true }
                     Button("Open data folder") { model.openDataFolder() }
+                    Button("Manage research topics") { managingTopics = true }
                 } label: {
                     Label("Library options", systemImage: "ellipsis.circle")
                 }
             }
+        }
+        .sheet(isPresented: $managingTopics) { TopicManagerView(settings: settings) }
+        .alert("Delete paper metadata?", isPresented: Binding(get: { deletingPaper != nil }, set: { if !$0 { deletingPaper = nil } })) {
+            Button("Cancel", role: .cancel) { deletingPaper = nil }
+            Button("Delete metadata", role: .destructive) {
+                if let paper = deletingPaper { model.deleteTrashedMetadata(paper) }
+                deletingPaper = nil
+            }
+        } message: {
+            Text("Removes this paper from Trash. Downloaded PDFs and reading notes are kept. A backup is saved first.")
         }
         .fileImporter(
             isPresented: $importingLegacy,
@@ -84,9 +101,9 @@ struct ContentView: View {
                     Label("All papers", systemImage: "tray.full")
                         .badge(model.activePapers.count)
                         .tag(LibraryScope.all)
-                    Label("라이브러리 정리", systemImage: "line.3.horizontal.decrease.circle")
+                    Label("Cleanup", systemImage: "line.3.horizontal.decrease.circle")
                         .tag(LibraryScope.cleanup)
-                    Label("제외됨", systemImage: "archivebox")
+                    Label("Trash", systemImage: "trash")
                         .badge(model.excludedCount)
                         .tag(LibraryScope.excluded)
                 }
@@ -107,16 +124,23 @@ struct ContentView: View {
                     }
                 }
 
-                Section("Topics") {
-                    ForEach(SmartTopic.allCases) { topic in
-                        Label(topic.label, systemImage: topic == .vla ? "figure.walk.motion" : "globe.americas")
+                Section {
+                    ForEach(settings.researchTopics) { topic in
+                        Label(topic.name, systemImage: "tag")
                             .badge(model.topicCount(topic))
-                            .tag(LibraryScope.topic(topic))
+                            .tag(LibraryScope.topic(topic.id))
+                    }
+                } header: {
+                    HStack {
+                        Text("Topics")
+                        Spacer()
+                        Button { managingTopics = true } label: { Image(systemName: "slider.horizontal.3") }
+                            .buttonStyle(.plain).help("Find, create or edit topics")
                     }
                 }
 
                 if !model.observedSubjects.isEmpty {
-                    Section("arXiv 분야 태그") {
+                    Section("arXiv categories") {
                         ForEach(model.observedSubjects, id: \.self) { subject in
                             Label(subject, systemImage: "number")
                                 .tag(LibraryScope.subject(subject))
@@ -143,9 +167,6 @@ struct ContentView: View {
                     .frame(width: 7, height: 7)
             }
             if model.geminiConfigured {
-                Text(settings.geminiModel)
-                    .font(.caption)
-                    .lineLimit(1)
                 Text("Today · \(model.todayUsage.requests) requests · \(model.todayUsage.totalTokens.formatted()) tokens")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -179,7 +200,9 @@ struct ContentView: View {
                     }
                 }
 
-                if model.papers.isEmpty {
+                if model.isLoadingTrash {
+                    ProgressView("Loading Trash…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if model.papers.isEmpty && model.scope != .excluded {
                     emptyState
                 } else if model.filteredPapers.isEmpty {
                     ContentUnavailableView(
@@ -194,24 +217,34 @@ struct ContentView: View {
                             paper: paper,
                             progress: model.progress(for: paper),
                             onReview: { model.markReviewed(paper) },
-                            onSave: { model.toggleSaved(paper) }
+                            onSave: { model.toggleSaved(paper) },
+                            isTrashed: model.scope == .excluded,
+                            onTrash: { model.moveToTrash(paper) },
+                            onRestore: { model.restoreExcluded(paper) }
                         )
+                        .disabled(!model.canChangeLibrary)
                         .tag(paper.shortID)
                         .contextMenu {
                           if model.scope == .excluded {
-                            Button("Inbox에 복구") { model.restoreExcluded(paper) }
+                            Button("Restore to library") { model.restoreExcluded(paper) }
+                            Button("Delete metadata…", role: .destructive) { deletingPaper = paper }
                           } else {
                             Button(model.favorites.contains(paper.shortID) ? "Remove from Saved" : "Save for later") {
                                 model.toggleSaved(paper)
                             }
                             Button("Mark as reviewed") { model.markReviewed(paper) }
                             Button("Move to Inbox") { model.moveToInbox(paper) }
+                            Button("Move to Trash", role: .destructive) { model.moveToTrash(paper) }
                           }
                             Divider()
                             Button("Open on arXiv") { model.openPaper(paper) }
                         }
                     }
                     .listStyle(.inset)
+                    .onDeleteCommand {
+                        guard let paper = model.selectedPaper else { return }
+                        if model.scope == .excluded { deletingPaper = paper } else { model.moveToTrash(paper) }
+                    }
                 }
             }
             .background(AppTheme.canvas(for: colorScheme))
@@ -228,10 +261,11 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
+            if model.scope != .excluded { Button {
                 model.scope = .calendar
             } label: {
                 Label("Choose dates", systemImage: "calendar")
+            }
             }
         }
         .padding(16)
@@ -254,7 +288,7 @@ struct ContentView: View {
     @ViewBuilder
     private var detailColumn: some View {
         if model.scope == .cleanup {
-            ContentUnavailableView("보관·읽기 기록 보호", systemImage: "checkmark.shield", description: Text("정리 후에는 제외됨 목록에서 논문을 복구할 수 있습니다."))
+            ContentUnavailableView("Your reading work is protected", systemImage: "checkmark.shield", description: Text("Cleanup moves unrelated, unread papers to Trash. Saved papers, notes and PDFs are kept."))
         } else if model.scope == .calendar {
             ContentUnavailableView(
                 "Select dates",
@@ -265,9 +299,10 @@ struct ContentView: View {
           VStack(spacing: 0) {
             if model.scope == .excluded {
                 HStack {
-                    Text("New·Inbox에서 제외된 논문").font(.caption)
+                    Text("In Trash").font(.caption)
                     Spacer()
-                    Button("Inbox에 복구") { model.restoreExcluded(paper) }
+                    Button("Restore") { model.restoreExcluded(paper) }
+                    Button("Delete…", role: .destructive) { deletingPaper = paper }
                 }.padding(12)
                 Divider()
             }
@@ -303,12 +338,12 @@ struct ContentView: View {
         case .reviewed: "Reviewed"
         case .saved: "Saved"
         case let .collection(id): model.library.collections.first(where: { $0.id == id })?.name ?? "Collection"
-        case let .topic(topic): topic.label
+        case let .topic(id): settings.researchTopics.first { $0.id == id }?.name ?? "Topic"
         case .calendar: "Discovery calendar"
         case .all: "All papers"
         case let .subject(subject): subject
-        case .cleanup: "라이브러리 정리"
-        case .excluded: "제외됨"
+        case .cleanup: "Cleanup"
+        case .excluded: "Trash"
         }
     }
 }
@@ -319,12 +354,17 @@ private struct PaperRow: View {
     let progress: PaperProgress
     let onReview: () -> Void
     let onSave: () -> Void
+    let isTrashed: Bool
+    let onTrash: () -> Void
+    let onRestore: () -> Void
+    private var isSaved: Bool { progress.savedAt != nil || progress.disposition == .saved }
+    private var isReviewed: Bool { progress.reviewedAt != nil || progress.disposition == .reviewed }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 6) {
-                    if progress.firstViewedAt == nil {
+                    if progress.firstViewedAt == nil && !isTrashed {
                         Circle()
                             .fill(AppTheme.sky)
                             .frame(width: 7, height: 7)
@@ -343,26 +383,37 @@ private struct PaperRow: View {
                     Text(paper.publishedAt.formatted(date: .abbreviated, time: .omitted))
                     if paper.abstractKO != nil { Text("KO") }
                     if !progress.note.isEmpty { Image(systemName: "note.text") }
+                    if isSaved { Text("Saved") }
+                    if isReviewed { Text("Reviewed") }
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
             }
             Spacer(minLength: 4)
             VStack(spacing: 10) {
+              if isTrashed {
+                Button(action: onRestore) { Image(systemName: "arrow.uturn.backward") }
+                    .buttonStyle(.borderless).help("Restore to library").accessibilityLabel("Restore to library")
+              } else {
                 Button(action: onSave) {
-                    Image(systemName: progress.disposition == .saved ? "bookmark.fill" : "bookmark")
+                    Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(progress.disposition == .saved ? (colorScheme == .light ? AppTheme.skyInk : AppTheme.sky) : .secondary)
-                .accessibilityLabel(progress.disposition == .saved ? "Remove from Saved" : "Save for later")
+                .foregroundStyle(isSaved ? (colorScheme == .light ? AppTheme.skyInk : AppTheme.sky) : .secondary)
+                .accessibilityLabel(isSaved ? "Remove from Saved" : "Save for later")
+                .help(isSaved ? "Remove bookmark; keep paper and notes" : "Save for later; does not download a PDF")
 
                 Button(action: onReview) {
-                    Image(systemName: progress.disposition == .reviewed ? "checkmark.circle.fill" : "checkmark.circle")
+                    Image(systemName: isReviewed ? "checkmark.circle.fill" : "checkmark.circle")
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(progress.disposition == .reviewed ? AppTheme.teal : .secondary)
+                .foregroundStyle(isReviewed ? AppTheme.teal : .secondary)
                 .accessibilityLabel("Mark as reviewed")
-            }
+                .help("Mark reviewed; keep bookmark, collections and notes")
+                Button(role: .destructive, action: onTrash) { Image(systemName: "trash") }
+                    .buttonStyle(.borderless).help("Move to Trash; restore anytime").accessibilityLabel("Move to Trash")
+              }
+            }.frame(width: 24)
         }
         .padding(.vertical, 6)
     }

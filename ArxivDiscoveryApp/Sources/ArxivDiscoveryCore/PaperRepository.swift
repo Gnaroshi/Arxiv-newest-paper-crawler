@@ -199,6 +199,9 @@ public struct PaperRepository: Sendable {
         return papers.filter { paper in
             let progress = library.progress(for: paper.shortID)
             let userOwned = progress.disposition == .saved
+                || progress.disposition == .reviewed
+                || progress.savedAt != nil
+                || progress.reviewedAt != nil
                 || !progress.collectionIDs.isEmpty
                 || !progress.note.isEmpty
                 || paper.abstractKO?.isEmpty == false
@@ -216,7 +219,8 @@ public struct PaperRepository: Sendable {
             library: loadLibraryState(),
             discoveryHistory: loadDiscoveryHistory(),
             translationUsage: loadTranslationUsage(),
-            cleanupState: loadCleanupState()
+            cleanupState: loadCleanupState(),
+            trashedPapers: loadTrashPapers()
         )
     }
 

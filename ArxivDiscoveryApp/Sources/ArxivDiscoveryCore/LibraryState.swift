@@ -79,7 +79,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
     }
 
     public var savedPaperIDs: Set<String> {
-        Set(papers.compactMap { $0.value.disposition == .saved ? $0.key : nil })
+        Set(papers.compactMap { $0.value.disposition == .saved || $0.value.savedAt != nil ? $0.key : nil })
     }
 
     public mutating func markViewed(_ paperID: String, at date: Date = Date()) {
@@ -92,10 +92,10 @@ public struct LibraryState: Codable, Equatable, Sendable {
 
     public mutating func markReviewed(_ paperID: String, at date: Date = Date()) {
         var progress = progress(for: paperID)
-        progress.disposition = .reviewed
+        let wasSaved = progress.savedAt != nil || progress.disposition == .saved
+        progress.disposition = wasSaved ? .saved : .reviewed
+        if wasSaved { progress.savedAt = progress.savedAt ?? date }
         progress.reviewedAt = date
-        progress.savedAt = nil
-        progress.collectionIDs = []
         progress.updatedAt = date
         papers[paperID] = progress
     }
@@ -105,7 +105,6 @@ public struct LibraryState: Codable, Equatable, Sendable {
         progress.disposition = .inbox
         progress.reviewedAt = nil
         progress.savedAt = nil
-        progress.collectionIDs = []
         progress.updatedAt = date
         papers[paperID] = progress
     }
@@ -115,11 +114,9 @@ public struct LibraryState: Codable, Equatable, Sendable {
         if saved {
             progress.disposition = .saved
             progress.savedAt = date
-            progress.reviewedAt = nil
         } else {
-            progress.disposition = .inbox
+            progress.disposition = progress.reviewedAt != nil ? .reviewed : .inbox
             progress.savedAt = nil
-            progress.collectionIDs = []
         }
         progress.updatedAt = date
         papers[paperID] = progress
@@ -145,7 +142,6 @@ public struct LibraryState: Codable, Equatable, Sendable {
             membership.insert(collectionID)
             progress.disposition = .saved
             progress.savedAt = progress.savedAt ?? date
-            progress.reviewedAt = nil
         } else {
             membership.remove(collectionID)
         }

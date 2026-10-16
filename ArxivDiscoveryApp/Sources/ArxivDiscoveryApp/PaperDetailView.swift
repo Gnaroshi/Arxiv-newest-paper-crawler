@@ -10,12 +10,14 @@ struct PaperDetailView: View {
     @State private var collectionName = ""
 
     private var progress: PaperProgress { model.progress(for: paper) }
+    private var isSaved: Bool { progress.savedAt != nil || progress.disposition == .saved }
+    private var isReviewed: Bool { progress.reviewedAt != nil || progress.disposition == .reviewed }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
-                primaryDecision
+                if model.scope != .excluded { primaryDecision }
                 actions
                 Divider()
                 abstractSection
@@ -85,19 +87,25 @@ struct PaperDetailView: View {
         Button {
             model.toggleSaved(paper)
         } label: {
-            Label(progress.disposition == .saved ? "Saved" : "Save for later", systemImage: progress.disposition == .saved ? "bookmark.fill" : "bookmark")
+            Label(isSaved ? "Saved" : "Save for later", systemImage: isSaved ? "bookmark.fill" : "bookmark")
         }
         .buttonStyle(.borderedProminent)
         .tint(AppTheme.sky)
         .foregroundStyle(Color.black.opacity(0.82))
+        .help("Bookmark this paper; PDF download is a separate action")
 
         Button {
-            if progress.disposition == .reviewed { model.moveToInbox(paper) }
+            if isReviewed { model.moveToInbox(paper) }
             else { model.markReviewed(paper) }
         } label: {
-            Label(progress.disposition == .reviewed ? "Reviewed" : "Not for me", systemImage: progress.disposition == .reviewed ? "checkmark.circle.fill" : "checkmark.circle")
+            Label(isReviewed ? "Reviewed" : "Mark reviewed", systemImage: isReviewed ? "checkmark.circle.fill" : "checkmark.circle")
         }
-        .tint(progress.disposition == .reviewed ? AppTheme.teal : .secondary)
+        .tint(isReviewed ? AppTheme.teal : .secondary)
+        .help("Record that you reviewed it; bookmarks, collections and notes are kept")
+
+        Button(role: .destructive) { model.moveToTrash(paper) } label: { Label("Trash", systemImage: "trash") }
+            .disabled(model.isDiscovering || model.isCleaning)
+            .help("Remove from the library; restore from Trash anytime")
 
         Menu {
             if model.library.collections.isEmpty {
@@ -181,9 +189,10 @@ struct PaperDetailView: View {
                 Text("Note").font(.headline)
                 Spacer()
                 Button("Save note") { model.saveNote(note, for: paper) }
-                    .disabled(note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
+                    .disabled(model.scope == .excluded || model.isCleaning || note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
             }
             TextEditor(text: $note)
+                .disabled(model.scope == .excluded)
                 .font(.body)
                 .frame(minHeight: 110)
                 .padding(8)

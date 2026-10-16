@@ -4,6 +4,7 @@ public struct ExcludedPaper: Codable, Equatable, Sendable {
     public var excludedAt: Date
     public var batchID: String
     public var reason: String
+    public var metadataDeleted: Bool? = nil
 }
 
 public struct TopicCleanupState: Codable, Equatable, Sendable {
@@ -12,7 +13,7 @@ public struct TopicCleanupState: Codable, Equatable, Sendable {
     public init() {}
 
     public var latestBatchID: String? {
-        excluded.values.max { $0.excludedAt < $1.excludedAt }?.batchID
+        excluded.values.filter { $0.metadataDeleted != true }.max { $0.excludedAt < $1.excludedAt }?.batchID
     }
 }
 
@@ -41,11 +42,67 @@ public struct TopicCleanupResult: Codable, Equatable, Sendable {
 
 public enum TopicCleanupError: LocalizedError {
     case emptyTopics
-    public var errorDescription: String? { "유지할 연구 주제를 하나 이상 선택하세요." }
+    case metadataUnavailable
+    public var errorDescription: String? {
+        switch self {
+        case .emptyTopics: "Select at least one research topic to keep."
+        case .metadataUnavailable: "This metadata has been deleted. Use the pre-change backup to recover it."
+        }
+    }
 }
 
 public extension PaperRepository {
     var cleanupStateURL: URL { rootURL.appendingPathComponent("cleanup-state.json") }
+    var trashURL: URL { rootURL.appendingPathComponent("trash.json") }
+
+    func loadTrashPapers() throws -> [Paper] {
+        let state = try loadCleanupState()
+        return try loadTrashArchive().filter { state.excluded[$0.shortID] != nil && state.excluded[$0.shortID]?.metadataDeleted != true }
+    }
+
+    private func loadTrashArchive() throws -> [Paper] {
+        guard FileManager.default.fileExists(atPath: trashURL.path) else { return [] }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode([Paper].self, from: Data(contentsOf: trashURL))
+    }
+
+    /// Archive first, then tombstones, then compact the live array. A failed write
+    /// never loses the last metadata copy; tombstones also suppress rediscovery.
+    @discardableResult
+    func compactExcludedPapers() throws -> Int {
+        let state = try loadCleanupState()
+        let papers = try loadPapers()
+        let removed = papers.filter { state.excluded[$0.shortID] != nil }
+        guard !removed.isEmpty else { return 0 }
+        _ = try writeCleanupBackup(batchID: "trash-migration-" + UUID().uuidString)
+        let archived = merge(existing: try loadTrashArchive(), discovered: removed)
+        try Self.cleanupEncoder.encode(archived).write(to: trashURL, options: .atomic)
+        try savePapers(papers.filter { state.excluded[$0.shortID] == nil })
+        return removed.count
+    }
+
+    func trashPaper(_ paper: Paper, now: Date = Date()) throws {
+        _ = try writeCleanupBackup(batchID: "manual-" + UUID().uuidString)
+        let archived = merge(existing: try loadTrashArchive(), discovered: [paper])
+        try Self.cleanupEncoder.encode(archived).write(to: trashURL, options: .atomic)
+        var state = try loadCleanupState()
+        state.excluded[paper.shortID] = .init(excludedAt: now, batchID: UUID().uuidString, reason: "Moved to Trash by you")
+        try Self.cleanupEncoder.encode(state).write(to: cleanupStateURL, options: .atomic)
+        try savePapers(loadPapers().filter { $0.shortID != paper.shortID })
+    }
+
+    func deleteTrashedMetadata(_ paperID: String) throws {
+        // PDF files, reading notes and a rediscovery tombstone are deliberately kept.
+        _ = try writeCleanupBackup(batchID: "delete-" + UUID().uuidString)
+        var state = try loadCleanupState()
+        guard state.excluded[paperID] != nil else { throw TopicCleanupError.metadataUnavailable }
+        state.excluded[paperID]?.metadataDeleted = true
+        try Self.cleanupEncoder.encode(state).write(to: cleanupStateURL, options: .atomic)
+        let remaining = try loadTrashArchive().filter { $0.shortID != paperID }
+        try Self.cleanupEncoder.encode(remaining).write(to: trashURL, options: .atomic)
+        try savePapers(loadPapers().filter { $0.shortID != paperID })
+    }
 
     func loadCleanupState() throws -> TopicCleanupState {
         guard FileManager.default.fileExists(atPath: cleanupStateURL.path) else { return TopicCleanupState() }
@@ -58,18 +115,21 @@ public extension PaperRepository {
         topics: [SmartTopic],
         papers: [Paper],
         library: LibraryState,
-        state: TopicCleanupState
+        state: TopicCleanupState,
+        researchTopics: [ResearchTopic]? = nil
     ) throws -> TopicCleanupPreview {
-        guard !topics.isEmpty else { throw TopicCleanupError.emptyTopics }
+        let rules = researchTopics ?? ResearchTopic.defaults.filter { topics.map(\.rawValue).contains($0.id) }
+        guard !rules.isEmpty, rules.allSatisfy(\.isValid) else { throw TopicCleanupError.emptyTopics }
         var preview = TopicCleanupPreview(topics: topics, totalCount: papers.count, relatedCount: 0, protectedCount: 0, alreadyExcludedCount: 0, candidates: [])
         for paper in papers {
             if state.excluded[paper.shortID] != nil {
                 preview.alreadyExcludedCount += 1
-            } else if topics.contains(where: { $0.matches(paper) }) {
+            } else if rules.contains(where: { $0.matches(paper) }) {
                 preview.relatedCount += 1
             } else {
                 let progress = library.progress(for: paper.shortID)
                 let userWork = progress.disposition != .inbox
+                    || progress.savedAt != nil || progress.reviewedAt != nil
                     || progress.firstViewedAt != nil
                     || !progress.collectionIDs.isEmpty
                     || !progress.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -81,7 +141,7 @@ public extension PaperRepository {
                     preview.candidates.append(.init(
                         paperID: paper.shortID,
                         title: paper.title,
-                        reason: "제목·초록에 선택한 연구 주제의 근거가 없는 미열람 Inbox 논문"
+                        reason: "Unread Inbox paper with no selected topic evidence in its title or abstract"
                     ))
                 }
             }
@@ -89,12 +149,12 @@ public extension PaperRepository {
         return preview
     }
 
-    func previewTopicCleanup(topics: [SmartTopic]) throws -> TopicCleanupPreview {
-        try previewTopicCleanup(topics: topics, papers: loadPapers(), library: loadLibraryState(), state: loadCleanupState())
+    func previewTopicCleanup(topics: [SmartTopic], researchTopics: [ResearchTopic]? = nil) throws -> TopicCleanupPreview {
+        try previewTopicCleanup(topics: topics, papers: loadPapers(), library: loadLibraryState(), state: loadCleanupState(), researchTopics: researchTopics)
     }
 
-    func applyTopicCleanup(topics: [SmartTopic], applicationVersion: String, now: Date = Date()) throws -> TopicCleanupResult {
-        let preview = try previewTopicCleanup(topics: topics)
+    func applyTopicCleanup(topics: [SmartTopic], applicationVersion: String, now: Date = Date(), researchTopics: [ResearchTopic]? = nil) throws -> TopicCleanupResult {
+        let preview = try previewTopicCleanup(topics: topics, researchTopics: researchTopics)
         let batchID = UUID().uuidString
         let backupURL = try writeCleanupBackup(batchID: batchID)
         let encoder = Self.cleanupEncoder
@@ -105,7 +165,12 @@ public extension PaperRepository {
         }
         let result = TopicCleanupResult(batchID: batchID, excludedCount: preview.candidates.count, backupPath: backupURL.path, preview: preview)
         try encoder.encode(result).write(to: backupURL.appendingPathComponent("result.json"), options: .atomic)
+        let candidates = Set(preview.candidates.map(\.paperID))
+        let papers = try loadPapers()
+        let archived = merge(existing: try loadTrashArchive(), discovered: papers.filter { candidates.contains($0.shortID) })
+        try encoder.encode(archived).write(to: trashURL, options: .atomic)
         try encoder.encode(state).write(to: cleanupStateURL, options: .atomic)
+        try savePapers(papers.filter { !candidates.contains($0.shortID) })
         return result
     }
 
@@ -115,21 +180,27 @@ public extension PaperRepository {
         guard let batchID = state.latestBatchID else { return 0 }
         _ = try writeCleanupBackup(batchID: "restore-" + UUID().uuidString)
         let before = state.excluded.count
-        state.excluded = state.excluded.filter { $0.value.batchID != batchID }
+        let restoreIDs = Set(state.excluded.filter { $0.value.batchID == batchID && $0.value.metadataDeleted != true }.keys)
+        try savePapers(merge(existing: loadPapers(), discovered: loadTrashArchive().filter { restoreIDs.contains($0.shortID) }))
+        state.excluded = state.excluded.filter { !restoreIDs.contains($0.key) }
         try Self.cleanupEncoder.encode(state).write(to: cleanupStateURL, options: .atomic)
+        try Self.cleanupEncoder.encode(loadTrashArchive().filter { !restoreIDs.contains($0.shortID) }).write(to: trashURL, options: .atomic)
         return before - state.excluded.count
     }
 
     func restoreExcludedPaper(_ paperID: String) throws {
         var state = try loadCleanupState()
+        guard state.excluded[paperID]?.metadataDeleted != true else { throw TopicCleanupError.metadataUnavailable }
+        try savePapers(merge(existing: loadPapers(), discovered: loadTrashArchive().filter { $0.shortID == paperID }))
         state.excluded.removeValue(forKey: paperID)
         try Self.cleanupEncoder.encode(state).write(to: cleanupStateURL, options: .atomic)
+        try Self.cleanupEncoder.encode(loadTrashArchive().filter { $0.shortID != paperID }).write(to: trashURL, options: .atomic)
     }
 
     private func writeCleanupBackup(batchID: String) throws -> URL {
         let url = rootURL.appendingPathComponent("Backups", isDirectory: true).appendingPathComponent("cleanup-" + batchID, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        for source in [papersURL, libraryURL, favoritesURL, discoveryHistoryURL, translationUsageURL, cleanupStateURL, statusURL] {
+        for source in [papersURL, libraryURL, favoritesURL, discoveryHistoryURL, translationUsageURL, cleanupStateURL, trashURL, statusURL] {
             if FileManager.default.fileExists(atPath: source.path) {
                 try FileManager.default.copyItem(at: source, to: url.appendingPathComponent(source.lastPathComponent))
             }

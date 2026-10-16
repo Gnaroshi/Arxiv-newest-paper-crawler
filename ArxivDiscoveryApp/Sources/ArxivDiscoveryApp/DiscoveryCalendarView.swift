@@ -14,7 +14,8 @@ struct DiscoveryCalendarView: View {
           VStack(alignment: .leading, spacing: 16) {
             DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
             Divider()
-            HStack {
+            ViewThatFits(in: .horizontal) {
+              HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Discovery calendar")
                         .font(.title2.weight(.bold))
@@ -23,14 +24,13 @@ struct DiscoveryCalendarView: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button { moveMonth(-1) } label: { Image(systemName: "chevron.left") }
-                    .accessibilityLabel("Previous month")
-                Text(monthTitle)
-                    .font(.headline)
-                    .frame(minWidth: 135)
-                Button { moveMonth(1) } label: { Image(systemName: "chevron.right") }
-                    .accessibilityLabel("Next month")
-                    .disabled(!canMoveForward)
+                monthControls
+              }
+              VStack(alignment: .leading, spacing: 12) {
+                Text("Discovery calendar").font(.title2.bold())
+                Text("Select dates to search · UTC").font(.caption).foregroundStyle(.secondary)
+                monthControls
+              }
             }
 
             LazyVGrid(columns: columns, spacing: 8) {
@@ -67,22 +67,22 @@ struct DiscoveryCalendarView: View {
                     if model.isDiscovering {
                         Label("Searching…", systemImage: "hourglass")
                     } else {
-                        Label(settings.discoveryMode == .topics ? "선택한 날짜의 주제 논문 가져오기" : "선택한 날짜의 분야 전체 가져오기", systemImage: "magnifyingglass")
+                        Label(settings.discoveryMode == .topics ? "Find topic papers" : "Search full categories", systemImage: "magnifyingglass")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-                .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled || (settings.discoveryMode == .topics ? settings.enabledTopics.isEmpty : settings.enabledCategories.isEmpty))
+                .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
             }
 
             HStack(spacing: 18) {
                 legend(color: AppTheme.teal, text: "Searched")
-                legend(color: AppTheme.orange, text: "검색 기준 변경됨")
+                legend(color: AppTheme.orange, text: "Scope changed")
                 legend(color: .secondary, text: "Not searched")
             }
             .font(.caption)
-          }.padding(20)
+          }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
         }
         .background(AppTheme.canvas(for: colorScheme))
     }
@@ -90,7 +90,7 @@ struct DiscoveryCalendarView: View {
     private func dayCell(_ date: Date) -> some View {
         let key = DiscoveryDate.key(for: date)
         let record = model.discoveryHistory.days[key]
-        let covers = record?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, topics: settings.enabledTopics) == true
+        let covers = record?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true
         let isSelected = model.selectedDiscoveryDays.contains(key)
         let isFuture = date > Date()
         let count = record.map { record in
@@ -114,11 +114,14 @@ struct DiscoveryCalendarView: View {
                     .font(.caption)
                     .foregroundStyle(record == nil ? .secondary : .primary)
                     .lineLimit(1)
-                if let record {
-                    Text(covers ? record.lastSearchedAt.formatted(date: .omitted, time: .shortened) : "재검색")
+                if let record, covers {
+                    Text(record.lastSearchedAt.formatted(date: .omitted, time: .shortened))
                         .font(.caption2)
-                        .foregroundStyle(covers ? .secondary : AppTheme.orange)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
+                } else if record != nil {
+                    Image(systemName: "arrow.clockwise").font(.caption2).foregroundStyle(AppTheme.orange)
+                        .help("Search again after changing topics")
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
@@ -151,6 +154,16 @@ struct DiscoveryCalendarView: View {
         visibleMonth.formatted(.dateTime.year().month(.wide))
     }
 
+    private var monthControls: some View {
+        HStack {
+            Button { moveMonth(-1) } label: { Image(systemName: "chevron.left") }
+                .help("Previous month").accessibilityLabel("Previous month")
+            Text(monthTitle).font(.headline).frame(minWidth: 135)
+            Button { moveMonth(1) } label: { Image(systemName: "chevron.right") }
+                .help("Next month").accessibilityLabel("Next month").disabled(!canMoveForward)
+        }
+    }
+
     private var canMoveForward: Bool {
         visibleMonth < Self.startOfMonth(Date())
     }
@@ -159,7 +172,7 @@ struct DiscoveryCalendarView: View {
         Set(monthSlots.compactMap { date in
             guard let date, date <= Date() else { return nil }
             let key = DiscoveryDate.key(for: date)
-            return model.discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, topics: settings.enabledTopics) == true ? nil : key
+            return model.discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true ? nil : key
         })
     }
 

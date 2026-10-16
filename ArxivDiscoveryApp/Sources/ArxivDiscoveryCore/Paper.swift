@@ -136,18 +136,21 @@ public struct DiscoveryQuery: Equatable, Sendable {
     public var categories: [String]
     public var mode: DiscoveryMode
     public var topics: [SmartTopic]
+    public var researchTopics: [ResearchTopic]?
 
     public init(
         interval: DateInterval,
         maxResults: Int = 500,
         categories: [String] = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.NE", "stat.ML"],
         mode: DiscoveryMode = .topics,
-        topics: [SmartTopic] = SmartTopic.allCases
+        topics: [SmartTopic] = SmartTopic.allCases,
+        researchTopics: [ResearchTopic]? = nil
     ) {
         self.interval = interval
         self.maxResults = min(max(maxResults, 1), 500)
         self.categories = categories
         self.mode = mode
         self.topics = topics
+        self.researchTopics = researchTopics
     }
 }

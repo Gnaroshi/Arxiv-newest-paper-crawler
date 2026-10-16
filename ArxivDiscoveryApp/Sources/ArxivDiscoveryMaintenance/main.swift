@@ -20,6 +20,9 @@ do {
         throw NSError(domain: "ArxivDiscoveryMaintenance", code: 1, userInfo: [NSLocalizedDescriptionKey: "Quit Arxiv Discovery normally before changing its local library."])
     }
     switch command {
+    case "migrate-trash":
+        guard applying else { throw NSError(domain: "ArxivDiscoveryMaintenance", code: 2, userInfo: [NSLocalizedDescriptionKey: "Migration requires --apply."]) }
+        try emit(["movedToTrash": repository.compactExcludedPapers()])
     case "cleanup":
         if applying {
             try emit(repository.applyTopicCleanup(topics: SmartTopic.allCases, applicationVersion: "0.4.0"))
@@ -32,7 +35,7 @@ do {
         }
         try emit(["restoredCount": repository.restoreLastTopicCleanup()])
     default:
-        print("Usage: ArxivDiscoveryMaintenance cleanup [--apply] | restore --apply")
+        print("Usage: ArxivDiscoveryMaintenance cleanup [--apply] | restore --apply | migrate-trash --apply")
     }
 } catch {
     FileHandle.standardError.write(Data("\(error.localizedDescription)\n".utf8))

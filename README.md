@@ -8,7 +8,8 @@ The SwiftUI app is the primary interface. Python remains available for compatibi
 
 - Multi-date UTC discovery calendar with paper counts and searched/unsearched state
 - Separate research-topic discovery (VLA / World Models by default) and explicit broad arXiv-category discovery
-- Recoverable cleanup of unrelated unread Inbox/New papers, with preview, backup, excluded list, and undo
+- Searchable, user-editable topic rules with required and excluded phrases
+- Recoverable cleanup of unrelated unread Inbox/New papers, with preview, backup, Trash, and undo
 - Inbox, New, Reviewed, Saved, collection, VLA, World Models, subject, and text filters
 - Persistent collections, per-paper notes, translations, and discovery history
 - Explicit per-paper PDF download
@@ -42,12 +43,13 @@ The installed application is `/Applications/Arxiv Discovery.app`. The install sc
 
 The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
 
-- `papers.json`: public arXiv metadata and optional Korean abstracts
+- `papers.json`: active public arXiv metadata and optional Korean abstracts
 - `favorites.json`: saved arXiv IDs
 - `library.json`: Inbox/Reviewed/Saved state, collections, and notes
 - `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
 - `translation-usage.json`: app-local Gemini request and token totals
-- `cleanup-state.json`: recoverable exclusions; original paper metadata and reading state remain intact
+- `cleanup-state.json`: removal tombstones, preventing silent rediscovery
+- `trash.json`: removed paper metadata, loaded only when Trash is opened
 - `Backups/cleanup-*/`: snapshots written before cleanup or restore
 - `status.json`: safe count and freshness summary for read-only integration
 - `PDFs/`: PDFs downloaded by explicit action
@@ -56,9 +58,13 @@ Use the app Import command to merge an older `data/papers.json`. When a sibling 
 
 ## Topic Discovery and Cleanup
 
-In Calendar, choose **연구 주제** to fetch only VLA / World Models papers for the selected dates. Topic matching uses titles and abstracts, including robotics context for the VLA acronym. **arXiv 분야 태그** is a separate, explicitly broad mode that fetches entire selected categories. Changing mode or topics invalidates the previous calendar coverage for that date.
+In Calendar, choose **Research topics**, then **Find or create topics**. Search existing rules or create a named topic with comma-separated **Match any**, optional **Require all**, and **Exclude any** phrases. Select the topics and dates, then choose **Find topic papers**. VLA and World Models are included by default. Matching uses titles and abstracts, including robotics context for the VLA acronym. **arXiv categories** is a separate broad mode that fetches entire selected categories. Editing a rule invalidates previous calendar coverage for that rule.
 
-Open **라이브러리 정리** to preview unrelated unread Inbox papers, then choose **관련 없는 논문 제외**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Excluded papers disappear from normal library views and remain available in **제외됨**. Restore one paper there, or choose **최근 정리 되돌리기** to undo the latest batch. Original metadata, PDF files, favorites and notes are not deleted.
+Open **Cleanup** to preview unrelated unread Inbox papers, then choose **Move unrelated to Trash**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Removed metadata leaves the active array and remains in **Trash**. Restore one paper there, or choose **Undo last cleanup** to restore the latest batch. Backups are written before changes. PDFs and notes are never deleted by cleanup.
+
+Every row has bookmark (**Save for later**), checkmark (**Mark reviewed**) and trash (**Move to Trash**) actions with tooltips. Saving does not download a PDF. Reviewing does not clear bookmarks, collections or notes. The Delete key also moves the selected paper to Trash. In Trash, **Delete metadata…** explicitly confirms removal of the metadata row; downloaded PDFs, reading notes, backups and the rediscovery tombstone remain.
+
+The interface is English. Korean remains an explicit abstract translation action.
 
 For local maintenance while the app is closed:
 
@@ -66,6 +72,7 @@ For local maintenance while the app is closed:
 "/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" cleanup
 "/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" cleanup --apply
 "/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" restore --apply
+"/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" migrate-trash --apply
 ```
 
 The maintenance command operates on the native app library and defaults to a read-only preview. The Python compatibility CLI continues to use its separately configured data directory.

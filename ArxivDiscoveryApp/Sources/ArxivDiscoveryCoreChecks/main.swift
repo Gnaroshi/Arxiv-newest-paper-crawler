@@ -106,6 +106,11 @@ func checkLibraryWorkflow() throws {
     try require(state.savedPaperIDs == ["paper-a"], "Saved IDs should be derived from library state.")
     try require(state.progress(for: "paper-a").collectionIDs == [collection.id], "A paper should belong to a collection.")
     try require(state.progress(for: "paper-a").note == "Compare the ablation.", "Notes should persist in progress state.")
+    state.markReviewed("paper-a")
+    try require(state.savedPaperIDs == ["paper-a"], "Reviewed must not remove a bookmark.")
+    try require(state.progress(for: "paper-a").collectionIDs == [collection.id], "Reviewed must preserve collection membership.")
+    state.setSaved(false, paperID: "paper-a")
+    try require(state.progress(for: "paper-a").reviewedAt != nil, "Unbookmarking must preserve review history.")
 }
 
 func checkDiscoveryHistory() throws {
@@ -214,12 +219,67 @@ func checkRecoverableCleanup() throws {
     let result = try repository.applyTopicCleanup(topics: SmartTopic.allCases, applicationVersion: "test")
     try require(result.excludedCount == 1, "Cleanup should apply the preview.")
     try require(FileManager.default.fileExists(atPath: result.backupPath + "/papers.json"), "Backup must exist before exclusion state is committed.")
-    try require(try Data(contentsOf: repository.papersURL) == papersBefore, "All original metadata must remain byte-identical.")
+    try require(try repository.loadPapers().count == values.count - 1, "Trash metadata must leave the live paper array.")
+    try require(try repository.loadTrashPapers().map(\.shortID) == ["unrelated"], "Trashed metadata must remain restorable.")
+    try require(try Data(contentsOf: URL(fileURLWithPath: result.backupPath).appendingPathComponent("papers.json")) == papersBefore, "The pre-change backup must contain the exact original metadata.")
     try require(try Data(contentsOf: repository.libraryURL) == libraryBefore, "All reading state must remain byte-identical.")
     try require(try repository.previewTopicCleanup(topics: SmartTopic.allCases).candidates.isEmpty, "Repeated cleanup must be idempotent.")
     try require(try repository.restoreLastTopicCleanup() == 1, "Undo should restore the last batch.")
     try require(try repository.loadCleanupState().excluded.isEmpty, "Undo should remove the exclusions.")
+    try require(try Set(repository.loadPapers().map(\.shortID)) == Set(values.map(\.shortID)), "Undo must restore the original paper set.")
+    try repository.trashPaper(values[5])
+    try require(try repository.loadLibraryState().progress(for: "note").note == "Keep my work", "Manual Trash must preserve notes.")
+    try repository.restoreExcludedPaper("note")
+    try require(try repository.loadPapers().contains { $0.shortID == "note" }, "Individual restore must work.")
+    try repository.trashPaper(values[0])
+    try repository.deleteTrashedMetadata("unrelated")
+    try require(try repository.loadTrashPapers().isEmpty, "Explicit metadata deletion removes the Trash row.")
+    try require(try repository.loadCleanupState().excluded["unrelated"] != nil, "Deleted papers must not be silently fetched again.")
     try require(try Data(contentsOf: downloaded) == Data("preserved PDF".utf8), "Cleanup and undo must preserve PDFs.")
+}
+
+func checkCustomTopics() throws {
+    let topic = ResearchTopic(name: "Battery life", anyTerms: ["cycle life", "state of health"], requiredTerms: ["battery"], excludedTerms: ["survey"])
+    try require(topic.matches(paper(abstract: "Predicting battery cycle-life.", translation: nil)), "User phrases must normalize punctuation.")
+    try require(!topic.matches(paper(abstract: "Cycle life of stars.", translation: nil)), "Required terms must constrain a topic.")
+    try require(!topic.matches(paper(abstract: "A survey of battery state of health.", translation: nil)), "Exclusions must win.")
+    let interval = try requireValue(DiscoveryDate.interval(for: "2026-10-01"), "Interval")
+    let query = DiscoveryQuery(interval: interval, researchTopics: [topic])
+    try require(query.searchExpression?.contains("ANDNOT") == true, "Remote query must carry negative rules.")
+    try require(query.accepts(paper(abstract: "battery cycle life", translation: nil)), "Local acceptance uses the same rule.")
+    let history = DiscoveryDayRecord(day: "2026-10-01", lastSearchedAt: Date(), paperCount: 1, categories: [], isComplete: true, mode: .topics, researchTopics: [topic])
+    var edited = topic
+    edited.anyTerms = ["thermal runaway"]
+    try require(!history.covers(mode: .topics, categories: [], researchTopics: [edited]), "Editing rules must invalidate old search coverage.")
+    let rules = ResearchTopic.defaults
+    try require(rules[1].matches(paper(abstract: "Composable World-Action Models for robotics", translation: nil)), "World-action plurals must not be lost by word boundaries.")
+    try require(rules[1].matches(paper(abstract: "World-Action Modeling via prediction", translation: nil)), "World-action modeling must remain related.")
+    try require(!rules[0].matches(paper(abstract: "VLA radio astronomy.", translation: nil)), "Custom-topic engine must disambiguate the VLA acronym.")
+    let values = (0..<7000).map { index -> Paper in
+        var value = paper(abstract: index % 2 == 0 ? "robot vision-language-action policy" : "unrelated image classification", translation: nil)
+        value.shortID = "fixture-\(index)"
+        return value
+    }
+    let started = Date()
+    let index = PaperSearchIndex(papers: values, topics: rules)
+    try require(index.topicCounts["vla"] == 3500, "Cached counts must match topic evidence.")
+    try require(index.topicIDsByPaper["fixture-1"]?.isEmpty == true, "Unrelated papers must not match.")
+    print("Indexed 7,000 fixture papers in \(String(format: "%.3f", Date().timeIntervalSince(started)))s; topic counts are cached.")
+}
+
+func checkTrashMigration() throws {
+    let root = try temporaryDirectory()
+    defer { try? FileManager.default.removeItem(at: root) }
+    let repository = PaperRepository(rootURL: root)
+    let value = paper(abstract: "A world model", translation: nil)
+    try repository.savePapers([value])
+    try repository.trashPaper(value)
+    // Simulate an interrupted old write or a pre-v2 excluded paper still in papers.json.
+    try repository.savePapers([value])
+    try require(try repository.compactExcludedPapers() == 1, "Old exclusions must migrate out of the live array.")
+    try require(try repository.compactExcludedPapers() == 0, "Migration must be idempotent.")
+    try require(try repository.loadTrashPapers().count == 1, "Migration must not duplicate archive entries.")
+    try require(try repository.makeBackupSnapshot(applicationVersion: "test").trashedPapers?.count == 1, "Private backups must include Trash metadata.")
 }
 
 func requireValue<T>(_ value: T?, _ message: String) throws -> T {
@@ -245,7 +305,9 @@ do {
     try checkBackupSnapshot()
     try checkTopicDiscovery()
     try checkRecoverableCleanup()
-    print("ArxivDiscoveryCoreChecks passed (9 checks).")
+    try checkCustomTopics()
+    try checkTrashMigration()
+    print("ArxivDiscoveryCoreChecks passed (11 checks).")
 } catch {
     FileHandle.standardError.write(Data("ArxivDiscoveryCoreChecks failed: \(error)\n".utf8))
     exit(EXIT_FAILURE)

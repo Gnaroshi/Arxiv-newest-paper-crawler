@@ -7,8 +7,8 @@ public enum DiscoveryMode: String, Codable, CaseIterable, Identifiable, Sendable
     public var id: String { rawValue }
     public var label: String {
         switch self {
-        case .topics: "연구 주제"
-        case .categories: "arXiv 분야 태그"
+        case .topics: "Research topics"
+        case .categories: "arXiv categories"
         }
     }
 }
@@ -19,7 +19,7 @@ public extension SmartTopic {
         case .vla:
             ["vision-language-action", "vision language action", "VLA", "VLAs", "OpenVLA", "SmolVLA"]
         case .worldModels:
-            ["world model", "world models", "world modelling", "world modeling", "world-model", "world action model"]
+            ["world model", "world models", "world modelling", "world modeling", "world-model", "world action model", "world action models", "world action modeling", "world action modelling"]
         }
     }
 
@@ -48,9 +48,9 @@ public extension DiscoveryQuery {
         let scope: String
         switch mode {
         case .topics:
-            guard !topics.isEmpty else { return nil }
-            let terms = Set(topics.flatMap(\.searchTerms)).sorted()
-            scope = terms.map { "(ti:\"\($0)\" OR abs:\"\($0)\")" }.joined(separator: " OR ")
+            let rules = researchTopics ?? ResearchTopic.defaults.filter { topics.map(\.rawValue).contains($0.id) }
+            guard !rules.isEmpty, rules.allSatisfy(\.isValid) else { return nil }
+            scope = rules.map { "(" + $0.searchExpression + ")" }.joined(separator: " OR ")
         case .categories:
             guard !categories.isEmpty else { return nil }
             scope = categories.sorted().map { "cat:\($0)" }.joined(separator: " OR ")
@@ -67,8 +67,10 @@ public extension DiscoveryQuery {
 
     func accepts(_ paper: Paper) -> Bool {
         switch mode {
-        case .topics: topics.contains { $0.matches(paper) }
-        case .categories: !Set(paper.subjects).isDisjoint(with: categories)
+        case .topics:
+            if let researchTopics { return researchTopics.contains { $0.matches(paper) } }
+            return topics.contains { $0.matches(paper) }
+        case .categories: return !Set(paper.subjects).isDisjoint(with: categories)
         }
     }
 }

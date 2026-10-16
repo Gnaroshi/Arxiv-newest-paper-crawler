@@ -39,6 +39,16 @@ final class AppSettings: ObservableObject {
         didSet { UserDefaults.standard.set(enabledTopics.map(\.rawValue).sorted(), forKey: "enabledTopics") }
     }
 
+    @Published var researchTopics: [ResearchTopic] {
+        didSet {
+            if let data = try? JSONEncoder().encode(researchTopics) { UserDefaults.standard.set(data, forKey: "researchTopics") }
+        }
+    }
+    @Published var selectedTopicIDs: Set<String> {
+        didSet { UserDefaults.standard.set(selectedTopicIDs.sorted(), forKey: "selectedTopicIDs") }
+    }
+    var selectedTopics: [ResearchTopic] { researchTopics.filter { selectedTopicIDs.contains($0.id) } }
+
     @Published var enabledCategories: Set<String> {
         didSet { UserDefaults.standard.set(enabledCategories.sorted(), forKey: "enabledCategories") }
     }
@@ -63,6 +73,16 @@ final class AppSettings: ObservableObject {
         discoveryMode = DiscoveryMode(rawValue: UserDefaults.standard.string(forKey: "discoveryMode") ?? "") ?? .topics
         let storedTopics = UserDefaults.standard.stringArray(forKey: "enabledTopics")
         enabledTopics = storedTopics.map { Set($0.compactMap(SmartTopic.init(rawValue:))) } ?? Set(SmartTopic.allCases)
+        let storedRules = UserDefaults.standard.data(forKey: "researchTopics").flatMap { try? JSONDecoder().decode([ResearchTopic].self, from: $0) } ?? ResearchTopic.defaults
+        let oldWorldTerms = Set(["world model", "world models", "world modelling", "world modeling", "world action model"])
+        researchTopics = storedRules.map { rule in
+            guard rule.id == SmartTopic.worldModels.rawValue, Set(rule.anyTerms) == oldWorldTerms,
+                  let updated = ResearchTopic.defaults.first(where: { $0.id == rule.id }) else { return rule }
+            var migrated = rule
+            migrated.anyTerms = updated.anyTerms
+            return migrated
+        }
+        selectedTopicIDs = Set(UserDefaults.standard.stringArray(forKey: "selectedTopicIDs") ?? storedTopics ?? SmartTopic.allCases.map(\.rawValue))
         let storedCategories = UserDefaults.standard.stringArray(forKey: "enabledCategories") ?? []
         enabledCategories = storedCategories.isEmpty ? Set(Self.categories) : Set(storedCategories)
         appearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system

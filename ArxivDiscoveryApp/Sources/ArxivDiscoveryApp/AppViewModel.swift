@@ -1,6 +1,7 @@
 import AppKit
 import ArxivDiscoveryCore
 import Foundation
+import Combine
 
 enum LibraryScope: Hashable {
     case inbox
@@ -8,7 +9,7 @@ enum LibraryScope: Hashable {
     case reviewed
     case saved
     case collection(String)
-    case topic(SmartTopic)
+    case topic(String)
     case calendar
     case all
     case subject(String)
@@ -18,8 +19,8 @@ enum LibraryScope: Hashable {
 
 @MainActor
 final class AppViewModel: ObservableObject {
-    @Published private(set) var papers: [Paper] = []
-    @Published private(set) var library = LibraryState()
+    @Published private(set) var papers: [Paper] = [] { didSet { rebuildIndex() } }
+    @Published private(set) var library = LibraryState() { didSet { refreshFilteredPapers() } }
     @Published private(set) var discoveryHistory = DiscoveryHistory()
     @Published private(set) var translationUsage = TranslationUsageLedger()
     @Published private(set) var cleanupState = TopicCleanupState()
@@ -30,8 +31,25 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var geminiConfigured = false
     @Published var selectedPaperID: String?
     @Published var selectedDiscoveryDays: Set<String> = [DiscoveryDate.key(for: Date())]
-    @Published var scope: LibraryScope = .inbox
-    @Published var searchText = ""
+    @Published var scope: LibraryScope = .inbox { didSet { scopeDidChange() } }
+    @Published var searchText = "" { didSet { scheduleSearch() } }
+    @Published private(set) var filteredPapers: [Paper] = []
+    @Published private(set) var activePapers: [Paper] = []
+    @Published private(set) var isLoadingTrash = false
+    private var trashPapers: [Paper] = []
+    private var trashSearchText: [String: String] = [:]
+    private var trashLoaded = false
+    private var searchIndex = PaperSearchIndex(papers: [], topics: [])
+    private var byID: [String: Paper] = [:]
+    private var cachedCollectionCounts: [String: Int] = [:]
+    @Published private(set) var inboxCount = 0
+    @Published private(set) var newCount = 0
+    @Published private(set) var reviewedCount = 0
+    @Published private(set) var savedCount = 0
+    @Published private(set) var excludedCount = 0
+    @Published private(set) var observedSubjects: [String] = []
+    private var topicSubscription: AnyCancellable?
+    private var searchTask: Task<Void, Never>?
     @Published private(set) var isDiscovering = false
     @Published private(set) var translatingPaperID: String?
     @Published private(set) var downloadingPaperID: String?
@@ -57,12 +75,24 @@ final class AppViewModel: ObservableObject {
         self.client = client
         self.version = version
         load()
+        topicSubscription = settings.$researchTopics.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.rebuildIndex() }
     }
 
     var favorites: Set<String> { library.savedPaperIDs }
 
-    var filteredPapers: [Paper] {
-        papers.filter { paper in
+    private func refreshFilteredPapers() {
+        inboxCount = 0; newCount = 0; reviewedCount = 0; savedCount = 0
+        cachedCollectionCounts = [:]
+        for paper in activePapers {
+            let progress = library.progress(for: paper.shortID)
+            if progress.disposition == .inbox { inboxCount += 1; if progress.firstViewedAt == nil { newCount += 1 } }
+            if progress.reviewedAt != nil || progress.disposition == .reviewed { reviewedCount += 1 }
+            if progress.savedAt != nil || progress.disposition == .saved { savedCount += 1 }
+            for id in progress.collectionIDs { cachedCollectionCounts[id, default: 0] += 1 }
+        }
+        let source = scope == .excluded ? trashPapers : activePapers
+        let query = ResearchTopic.normalize(searchText)
+        filteredPapers = source.filter { paper in
             let excluded = cleanupState.excluded[paper.shortID] != nil
             if scope != .excluded && excluded { return false }
             let progress = library.progress(for: paper.shortID)
@@ -70,10 +100,10 @@ final class AppViewModel: ObservableObject {
             switch scope {
             case .inbox: matchesScope = progress.disposition == .inbox
             case .new: matchesScope = progress.disposition == .inbox && progress.firstViewedAt == nil
-            case .reviewed: matchesScope = progress.disposition == .reviewed
-            case .saved: matchesScope = progress.disposition == .saved
+            case .reviewed: matchesScope = progress.reviewedAt != nil || progress.disposition == .reviewed
+            case .saved: matchesScope = progress.savedAt != nil || progress.disposition == .saved
             case let .collection(id): matchesScope = progress.collectionIDs.contains(id)
-            case let .topic(topic): matchesScope = topic.matches(paper)
+            case let .topic(topic): matchesScope = searchIndex.topicIDsByPaper[paper.shortID]?.contains(topic) == true
             case .calendar: matchesScope = false
             case .all: matchesScope = true
             case let .subject(subject): matchesScope = paper.subjects.contains(subject)
@@ -81,41 +111,68 @@ final class AppViewModel: ObservableObject {
             case .excluded: matchesScope = excluded
             }
             guard matchesScope else { return false }
-            let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !query.isEmpty else { return true }
-            return paper.title.localizedCaseInsensitiveContains(query)
-                || paper.authors.contains(where: { $0.localizedCaseInsensitiveContains(query) })
-                || paper.abstract.localizedCaseInsensitiveContains(query)
-                || progress.note.localizedCaseInsensitiveContains(query)
-                || paper.subjects.contains(where: { $0.localizedCaseInsensitiveContains(query) })
+            let text = searchIndex.textByID[paper.shortID] ?? trashSearchText[paper.shortID] ?? ""
+            return text.contains(query) || ResearchTopic.normalize(progress.note).contains(query)
         }
     }
 
-    var observedSubjects: [String] {
-        let observed = Set(activePapers.flatMap(\.subjects))
-        return AppSettings.categories.filter { observed.contains($0) }
+    private func rebuildIndex() {
+        activePapers = papers.filter { cleanupState.excluded[$0.shortID] == nil }
+        byID = Dictionary(activePapers.map { ($0.shortID, $0) }, uniquingKeysWith: { _, last in last })
+        searchIndex = PaperSearchIndex(papers: activePapers, topics: settings.researchTopics)
+        let subjects = Set(activePapers.flatMap(\.subjects))
+        observedSubjects = AppSettings.categories.filter { subjects.contains($0) }
+        refreshFilteredPapers()
+    }
+
+    private func scheduleSearch() {
+        searchTask?.cancel()
+        searchTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else { return }
+            self?.refreshFilteredPapers()
+        }
+    }
+
+    private func scopeDidChange() {
+        refreshFilteredPapers()
+        guard scope == .excluded, !isLoadingTrash, !trashLoaded else { return }
+        isLoadingTrash = true
+        let repository = repository
+        Task {
+            defer { isLoadingTrash = false }
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    let values = try repository.loadTrashPapers()
+                    return (values, PaperSearchIndex(papers: values, topics: []).textByID)
+                }.value
+                trashPapers = result.0
+                trashSearchText = result.1
+                trashLoaded = true
+                excludedCount = trashPapers.count
+                refreshFilteredPapers()
+            } catch { errorMessage = "Trash could not be loaded. \(error.localizedDescription)" }
+        }
     }
 
     var selectedPaper: Paper? {
         guard let selectedPaperID else { return nil }
-        return papers.first(where: { $0.shortID == selectedPaperID })
+        return byID[selectedPaperID] ?? trashPapers.first { $0.shortID == selectedPaperID }
     }
-
-    var activePapers: [Paper] { papers.filter { cleanupState.excluded[$0.shortID] == nil } }
-    var excludedCount: Int { papers.count - activePapers.count }
-    var inboxCount: Int { count { $0.disposition == .inbox } }
-    var newCount: Int { activePapers.lazy.filter { self.library.progress(for: $0.shortID).disposition == .inbox && self.library.progress(for: $0.shortID).firstViewedAt == nil }.count }
-    var reviewedCount: Int { count { $0.disposition == .reviewed } }
-    var savedCount: Int { count { $0.disposition == .saved } }
 
     var todayUsage: TranslationUsageRecord {
         translationUsage.summary(for: DiscoveryDate.key(for: Date()))
     }
 
+    var canChangeLibrary: Bool {
+        !isDiscovering && !isCleaning && !isLoadingTrash && translatingPaperID == nil && downloadingPaperID == nil && !ShowcaseMode.isEnabled
+    }
+
     var unsearchedRecentCount: Int {
         let categories = settings.enabledCategories
         return DiscoveryDate.recentKeys(count: 30).filter { key in
-            discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: categories, topics: settings.enabledTopics) != true
+            discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: categories, researchTopics: settings.selectedTopics) != true
         }.count
     }
 
@@ -124,15 +181,15 @@ final class AppViewModel: ObservableObject {
     }
 
     func collectionCount(_ collectionID: String) -> Int {
-        activePapers.lazy.filter { self.library.progress(for: $0.shortID).collectionIDs.contains(collectionID) }.count
+        cachedCollectionCounts[collectionID, default: 0]
     }
 
-    func topicCount(_ topic: SmartTopic) -> Int {
-        activePapers.lazy.filter(topic.matches).count
+    func topicCount(_ topic: ResearchTopic) -> Int {
+        searchIndex.topicCounts[topic.id, default: 0]
     }
 
     func recordSelection() {
-        guard let selectedPaperID else { return }
+        guard let selectedPaperID, scope != .excluded else { return }
         let before = library.progress(for: selectedPaperID).firstViewedAt
         library.markViewed(selectedPaperID)
         if before == nil { persistLibrary() }
@@ -147,12 +204,12 @@ final class AppViewModel: ObservableObject {
 
     func searchSelectedDates() {
         guard !isDiscovering, !isCleaning, !ShowcaseMode.isEnabled else { return }
-        guard settings.discoveryMode != .topics || !settings.enabledTopics.isEmpty else {
-            errorMessage = "가져올 연구 주제를 하나 이상 선택하세요."
+        guard settings.discoveryMode != .topics || !settings.selectedTopics.isEmpty else {
+            errorMessage = "Select at least one research topic."
             return
         }
         guard settings.discoveryMode != .categories || !settings.enabledCategories.isEmpty else {
-            errorMessage = "가져올 arXiv 분야 태그를 하나 이상 선택하세요."
+            errorMessage = "Select at least one arXiv category."
             return
         }
         let validKeys = selectedDiscoveryDays
@@ -172,6 +229,7 @@ final class AppViewModel: ObservableObject {
         let categories = settings.enabledCategories.sorted()
         let mode = settings.discoveryMode
         let topics = settings.enabledTopics.sorted { $0.rawValue < $1.rawValue }
+        let researchTopics = settings.selectedTopics
         Task {
             var merged = papers
             var updatedHistory = discoveryHistory
@@ -179,11 +237,11 @@ final class AppViewModel: ObservableObject {
             var failures: [String] = []
             for key in validKeys {
                 guard let interval = DiscoveryDate.interval(for: key) else { continue }
-                let query = DiscoveryQuery(interval: interval, maxResults: 500, categories: categories, mode: mode, topics: topics)
+                let query = DiscoveryQuery(interval: interval, maxResults: 500, categories: categories, mode: mode, topics: topics, researchTopics: researchTopics)
                 do {
                     let searchedAt = Date()
                     let batch = try await client.discoverBatch(query: query, now: searchedAt)
-                    let discovered = batch.papers
+                    let discovered = batch.papers.filter { cleanupState.excluded[$0.shortID] == nil }
                     merged = repository.merge(existing: merged, discovered: discovered)
                     totalFound += discovered.count
                     updatedHistory.record(.init(
@@ -193,7 +251,8 @@ final class AppViewModel: ObservableObject {
                         categories: categories,
                         isComplete: batch.isComplete,
                         mode: mode,
-                        topics: topics
+                        topics: topics,
+                        researchTopics: researchTopics
                     ))
                 } catch {
                     failures.append(key)
@@ -233,7 +292,8 @@ final class AppViewModel: ObservableObject {
                 topics: settings.enabledTopics.sorted { $0.rawValue < $1.rawValue },
                 papers: papers,
                 library: library,
-                state: cleanupState
+                state: cleanupState,
+                researchTopics: settings.selectedTopics
             )
         } catch {
             errorMessage = error.localizedDescription
@@ -241,44 +301,77 @@ final class AppViewModel: ObservableObject {
     }
 
     func applyCleanup() {
-        guard !isDiscovering, !isCleaning, !ShowcaseMode.isEnabled else { return }
-        isCleaning = true
-        defer { isCleaning = false }
-        do {
-            let result = try repository.applyTopicCleanup(
-                topics: settings.enabledTopics.sorted { $0.rawValue < $1.rawValue },
-                applicationVersion: version
-            )
-            cleanupState = try repository.loadCleanupState()
-            reconcileSelection()
-            previewCleanup()
-            notice = "관련 없는 미열람 논문 \(result.excludedCount)편을 제외했습니다. 제외됨에서 복구할 수 있습니다."
-            try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
-        } catch { errorMessage = "정리를 완료하지 못했습니다. \(error.localizedDescription)" }
+        let rules = settings.selectedTopics
+        let version = version
+        mutateLibrary { repository in
+            let result = try repository.applyTopicCleanup(topics: [], applicationVersion: version, researchTopics: rules)
+            return "Moved \(result.excludedCount) unrelated papers to Trash. Restore them anytime."
+        }
     }
 
     func restoreLastCleanup() {
-        guard !isDiscovering, !isCleaning, !ShowcaseMode.isEnabled else { return }
-        do {
-            let count = try repository.restoreLastTopicCleanup()
-            cleanupState = try repository.loadCleanupState()
-            previewCleanup()
-            notice = "최근 정리에서 제외한 \(count)편을 복구했습니다."
-            try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
-        } catch { errorMessage = "복구하지 못했습니다. \(error.localizedDescription)" }
+        mutateLibrary { repository in "Restored \(try repository.restoreLastTopicCleanup()) papers from the last cleanup." }
     }
 
     func restoreExcluded(_ paper: Paper) {
-        do {
+        mutateLibrary { repository in
             try repository.restoreExcludedPaper(paper.shortID)
-            cleanupState = try repository.loadCleanupState()
-            notice = "Inbox에 복구했습니다."
-            reconcileSelection()
-            try? writeStatus(availability: "ready")
-        } catch { errorMessage = "복구하지 못했습니다. \(error.localizedDescription)" }
+            return "Restored to your library."
+        }
+    }
+
+    func moveToTrash(_ paper: Paper) {
+        mutateLibrary { repository in
+            try repository.trashPaper(paper)
+            return "Moved to Trash. PDF files and notes were kept."
+        }
+    }
+
+    func deleteTrashedMetadata(_ paper: Paper) {
+        mutateLibrary { repository in
+            try repository.deleteTrashedMetadata(paper.shortID)
+            return "Paper metadata deleted. Downloaded PDFs and notes were not deleted."
+        }
+    }
+
+    private func mutateLibrary(_ operation: @escaping @Sendable (PaperRepository) throws -> String) {
+        guard canChangeLibrary else {
+            notice = "Finish the current search, download or translation before changing the library."
+            return
+        }
+        isCleaning = true
+        let repository = repository
+        Task {
+            defer { isCleaning = false }
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    let message = try operation(repository)
+                    let trash = try repository.loadTrashPapers()
+                    return (message, try repository.loadPapers(), try repository.loadCleanupState(), trash, PaperSearchIndex(papers: trash, topics: []).textByID)
+                }.value
+                cleanupState = result.2
+                papers = result.1
+                trashPapers = result.3
+                trashSearchText = result.4
+                trashLoaded = true
+                excludedCount = trashPapers.count
+                refreshFilteredPapers()
+                reconcileSelection()
+                if scope == .cleanup { previewCleanup() }
+                notice = result.0
+                try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
+            } catch {
+                // A partial write is recoverable from the archive/backup. Re-read
+                // the live state without changing the user's current view.
+                if let state = try? repository.loadCleanupState() { cleanupState = state }
+                if let latest = try? repository.loadPapers() { papers = latest }
+                errorMessage = "The library change could not finish. Your backup and PDF files are kept. \(error.localizedDescription)"
+            }
+        }
     }
 
     func markReviewed(_ paper: Paper) {
+        guard !isCleaning else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.markReviewed(paper.shortID)
         persistLibrary(notice: "Moved to Reviewed.")
@@ -286,21 +379,25 @@ final class AppViewModel: ObservableObject {
     }
 
     func moveToInbox(_ paper: Paper) {
+        guard !isCleaning else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.moveToInbox(paper.shortID)
         persistLibrary(notice: "Moved to Inbox.")
     }
 
     func toggleSaved(_ paper: Paper) {
+        guard !isCleaning else { return }
         guard restoreBeforeKeeping(paper) else { return }
-        let saving = library.progress(for: paper.shortID).disposition != .saved
+        let progress = library.progress(for: paper.shortID)
+        let saving = progress.savedAt == nil && progress.disposition != .saved
         library.setSaved(saving, paperID: paper.shortID)
-        persistLibrary(notice: saving ? "Saved for later." : "Moved to Inbox.")
+        persistLibrary(notice: saving ? "Saved for later." : "Bookmark removed. Reading work was kept.")
         if !saving { advance(after: paper) }
     }
 
     @discardableResult
     func createCollection(named name: String, adding paper: Paper? = nil) -> Bool {
+        guard !isCleaning else { return false }
         guard let collection = library.createCollection(named: name) else {
             errorMessage = "Use a non-empty, unique collection name."
             return false
@@ -311,11 +408,15 @@ final class AppViewModel: ObservableObject {
     }
 
     func setCollection(_ collectionID: String, contains paper: Paper, enabled: Bool) {
+        guard !isCleaning else { return }
+        guard restoreBeforeKeeping(paper) else { return }
         library.setCollection(collectionID, contains: paper.shortID, enabled: enabled)
         persistLibrary()
     }
 
     func saveNote(_ note: String, for paper: Paper) {
+        guard !isCleaning else { return }
+        guard restoreBeforeKeeping(paper) else { return }
         library.setNote(note, paperID: paper.shortID)
         persistLibrary(notice: "Note saved.")
     }
@@ -335,7 +436,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func translate(_ paper: Paper) {
-        guard translatingPaperID == nil else { return }
+        guard translatingPaperID == nil, !isCleaning, !isDiscovering else { return }
         do {
             guard let apiKey = try keychain.read(), !apiKey.isEmpty else {
                 errorMessage = "Add a Gemini API key in Settings before translating."
@@ -398,7 +499,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func downloadPDF(_ paper: Paper) {
-        guard downloadingPaperID == nil, let url = paper.downloadablePDFURL else { return }
+        guard downloadingPaperID == nil, !isCleaning, let url = paper.downloadablePDFURL else { return }
         downloadingPaperID = paper.shortID
         errorMessage = nil
         Task {
@@ -443,10 +544,6 @@ final class AppViewModel: ObservableObject {
         NSWorkspace.shared.open(repository.rootURL)
     }
 
-    private func count(where predicate: @escaping (PaperProgress) -> Bool) -> Int {
-        activePapers.lazy.filter { predicate(self.library.progress(for: $0.shortID)) }.count
-    }
-
     private func persistLibrary(notice: String? = nil) {
         do {
             try repository.saveLibraryState(library)
@@ -462,9 +559,12 @@ final class AppViewModel: ObservableObject {
         do {
             try repository.restoreExcludedPaper(paper.shortID)
             cleanupState = try repository.loadCleanupState()
+            papers = try repository.loadPapers()
+            trashPapers.removeAll { $0.shortID == paper.shortID }
+            excludedCount = max(0, excludedCount - 1)
             return true
         } catch {
-            errorMessage = "논문을 복구하지 못했습니다. \(error.localizedDescription)"
+            errorMessage = "The paper could not be restored. \(error.localizedDescription)"
             return false
         }
     }
@@ -490,6 +590,8 @@ final class AppViewModel: ObservableObject {
             discoveryHistory = try repository.loadDiscoveryHistory()
             translationUsage = try repository.loadTranslationUsage()
             cleanupState = try repository.loadCleanupState()
+            excludedCount = cleanupState.excluded.values.filter { $0.metadataDeleted != true }.count
+            rebuildIndex()
             selectedPaperID = nil
             lastRefresh = try repository.loadStatus()?.lastRefresh
             geminiConfigured = (try? keychain.read())?.isEmpty == false

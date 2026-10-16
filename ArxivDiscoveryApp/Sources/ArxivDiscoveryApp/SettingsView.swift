@@ -22,7 +22,7 @@ struct SettingsView: View {
                 .pickerStyle(.segmented)
             }
 
-            Section("논문 가져오기") {
+            Section("Discovery") {
                 DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
             }
 
