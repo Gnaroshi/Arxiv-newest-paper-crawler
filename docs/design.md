@@ -17,6 +17,7 @@ The main window answers five questions without opening another screen: what the 
 - Bookmark means Save for later, checkmark means Mark reviewed, trash means Remove from the library. Review and save are independent; neither clears collections or notes. All icon controls have help and an accessible action name.
 
 The minimum window is 900×620. Text wraps before controls compress. The candidate and detail columns remain independently scrollable.
+Calendar and Cleanup use the full workspace instead of an empty detail placeholder. Calendar search actions stay pinned below the scrollable dates; date-by-date progress, cancellation and errors appear beside those actions.
 
 ## Performance and recovery
 

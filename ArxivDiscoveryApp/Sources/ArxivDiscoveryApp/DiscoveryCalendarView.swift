@@ -10,7 +10,8 @@ struct DiscoveryCalendarView: View {
     private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
 
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+          ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
             Divider()
@@ -49,7 +50,26 @@ struct DiscoveryCalendarView: View {
                     }
                 }
             }
+            HStack(spacing: 18) {
+                legend(color: AppTheme.teal, text: "Searched")
+                legend(color: AppTheme.orange, text: "Scope changed")
+                legend(color: .secondary, text: "Not searched")
+            }.font(.caption)
+          }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
+          }
+          Divider()
+          discoveryFooter.padding(16)
+        }
+        .background(AppTheme.canvas(for: colorScheme))
+    }
 
+    private var discoveryFooter: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let message = model.errorMessage ?? model.notice {
+                Text(message).font(.callout).foregroundStyle(model.errorMessage == nil ? Color.secondary : Color.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let progress = model.discoveryProgress { Text(progress).font(.caption).foregroundStyle(.secondary) }
             VStack(alignment: .leading, spacing: 12) {
               HStack {
                 Button("Select unsearched") { selectUnsearchedMonth() }
@@ -74,17 +94,9 @@ struct DiscoveryCalendarView: View {
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
                 .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
+                if model.isDiscovering { Button("Cancel search") { model.cancelDiscovery() } }
             }
-
-            HStack(spacing: 18) {
-                legend(color: AppTheme.teal, text: "Searched")
-                legend(color: AppTheme.orange, text: "Scope changed")
-                legend(color: .secondary, text: "Not searched")
-            }
-            .font(.caption)
-          }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .background(AppTheme.canvas(for: colorScheme))
+        }.frame(maxWidth: 928, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func dayCell(_ date: Date) -> some View {

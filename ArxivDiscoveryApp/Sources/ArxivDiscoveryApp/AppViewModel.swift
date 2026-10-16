@@ -51,6 +51,8 @@ final class AppViewModel: ObservableObject {
     private var topicSubscription: AnyCancellable?
     private var searchTask: Task<Void, Never>?
     @Published private(set) var isDiscovering = false
+    @Published private(set) var discoveryProgress: String?
+    private var discoveryTask: Task<Void, Never>?
     @Published private(set) var translatingPaperID: String?
     @Published private(set) var downloadingPaperID: String?
     @Published private(set) var lastRefresh: Date?
@@ -230,12 +232,15 @@ final class AppViewModel: ObservableObject {
         let mode = settings.discoveryMode
         let topics = settings.enabledTopics.sorted { $0.rawValue < $1.rawValue }
         let researchTopics = settings.selectedTopics
-        Task {
+        discoveryTask = Task {
+            defer { isDiscovering = false; discoveryProgress = nil; discoveryTask = nil }
             var merged = papers
             var updatedHistory = discoveryHistory
             var totalFound = 0
             var failures: [String] = []
-            for key in validKeys {
+            for (index, key) in validKeys.enumerated() {
+                guard !Task.isCancelled else { break }
+                discoveryProgress = "Searching \(index + 1) of \(validKeys.count) dates · \(key)"
                 guard let interval = DiscoveryDate.interval(for: key) else { continue }
                 let query = DiscoveryQuery(interval: interval, maxResults: 500, categories: categories, mode: mode, topics: topics, researchTopics: researchTopics)
                 do {
@@ -255,6 +260,7 @@ final class AppViewModel: ObservableObject {
                         researchTopics: researchTopics
                     ))
                 } catch {
+                    if Task.isCancelled { break }
                     failures.append(key)
                 }
             }
@@ -271,7 +277,9 @@ final class AppViewModel: ObservableObject {
                 papers = merged
                 discoveryHistory = updatedHistory
                 lastRefresh = Date()
-                if failures.isEmpty {
+                if Task.isCancelled {
+                    notice = "Search cancelled. Kept \(totalFound) results received so far."
+                } else if failures.isEmpty {
                     notice = "Found \(totalFound) papers across \(validKeys.count) selected date\(validKeys.count == 1 ? "" : "s")."
                 } else {
                     errorMessage = "Search finished, but \(failures.joined(separator: ", ")) could not be fetched."
@@ -281,9 +289,10 @@ final class AppViewModel: ObservableObject {
                 errorMessage = "Local data could not be updated. \(error.localizedDescription)"
                 try? writeStatus(availability: papers.isEmpty ? "unavailable" : "partial", errorCode: "discovery_save_failed")
             }
-            isDiscovering = false
         }
     }
+
+    func cancelDiscovery() { discoveryTask?.cancel() }
 
     func previewCleanup() {
         cleanupPreview = nil

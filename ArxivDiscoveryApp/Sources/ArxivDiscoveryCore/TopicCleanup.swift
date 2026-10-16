@@ -26,6 +26,7 @@ public struct TopicCleanupCandidate: Codable, Equatable, Identifiable, Sendable 
 
 public struct TopicCleanupPreview: Codable, Equatable, Sendable {
     public var topics: [SmartTopic]
+    public var researchTopics: [ResearchTopic]? = nil
     public var totalCount: Int
     public var relatedCount: Int
     public var protectedCount: Int
@@ -121,6 +122,7 @@ public extension PaperRepository {
         let rules = researchTopics ?? ResearchTopic.defaults.filter { topics.map(\.rawValue).contains($0.id) }
         guard !rules.isEmpty, rules.allSatisfy(\.isValid) else { throw TopicCleanupError.emptyTopics }
         var preview = TopicCleanupPreview(topics: topics, totalCount: papers.count, relatedCount: 0, protectedCount: 0, alreadyExcludedCount: 0, candidates: [])
+        preview.researchTopics = rules
         for paper in papers {
             if state.excluded[paper.shortID] != nil {
                 preview.alreadyExcludedCount += 1

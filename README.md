@@ -75,7 +75,7 @@ For local maintenance while the app is closed:
 "/Applications/Arxiv Discovery.app/Contents/MacOS/ArxivDiscoveryMaintenance" migrate-trash --apply
 ```
 
-The maintenance command operates on the native app library and defaults to a read-only preview. The Python compatibility CLI continues to use its separately configured data directory.
+The maintenance command operates on the native app library, uses the built-in VLA/World Models rules, and defaults to a read-only preview. Use Cleanup in the app for your selected custom topic rules. The Python compatibility CLI continues to use its separately configured data directory.
 
 ## Optional Gemini translation
 

@@ -261,7 +261,9 @@ struct ContentView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if model.scope != .excluded { Button {
+            if model.isCleaning {
+                ProgressView("Updating…").controlSize(.small)
+            } else if model.scope != .excluded { Button {
                 model.scope = .calendar
             } label: {
                 Label("Choose dates", systemImage: "calendar")
