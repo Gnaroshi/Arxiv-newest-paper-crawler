@@ -102,7 +102,7 @@ New local tests cover cancel/checkpoint/retry exact ID sets, scope revisions,
 relaunch recovery, reading-work preservation, manual choices, local-midnight
 expiry, missing evidence, reviewed-item exclusion, shortlist bounds, private
 backup inclusion, cleanup protection, and out-of-scope detail reconciliation.
-The application suite has 26 tests, including a guard against starting discovery
+The application suite has 27 tests, including a guard against starting discovery
 from a keyboard command while topic editors are open. A 7,000-record priority calculation took about
 123 ms in one debug run, excluding the initial text/topic index; it runs off-main.
 This is model timing, not a rendering FPS claim. Topic-switch model pairs were

@@ -129,7 +129,8 @@ public struct DailyReadingPlan: Codable, Equatable, Sendable {
                 }
                 let focusMatches = focus.filter { (" " + text + " ").contains(" " + $0 + " ") }
                 if !focusMatches.isEmpty {
-                    item.score += 30
+                    let focusedTitle = focusMatches.contains { title.contains(" " + $0 + " ") }
+                    item.score += (focusedTitle ? 70 : 40) + min(20, max(0, focusMatches.count - 1) * 10)
                     item.reasons.append("Matches your reading focus: \(focusMatches.joined(separator: ", ")).")
                 }
                 if progress.savedAt != nil || progress.disposition == .saved {

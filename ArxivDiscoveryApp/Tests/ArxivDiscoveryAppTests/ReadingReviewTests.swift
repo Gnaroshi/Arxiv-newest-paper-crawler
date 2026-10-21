@@ -146,4 +146,16 @@ final class ReadingReviewTests: XCTestCase {
         XCTAssertEqual(value.items.filter { $0.bucket == .readFirst }.count, 5)
         XCTAssertLessThan(elapsed, 1.5)
     }
+
+    func testExplicitTitleFocusOutranksBroadTopicAndCanRecommendOutsideCurrentTopics() throws {
+        let papers = [paper("broad"), paper("focus", title: "Neural ODE Methods", abstract: "Differential equation solvers.")]
+        var state = ReadingReviewState()
+        state.focusTerms = ["neural ode"]
+        state.dailyLimit = 1
+        let value = try plan(papers, state: state)
+        XCTAssertEqual(value.items.first?.paperID, "focus")
+        XCTAssertEqual(value.items.first?.bucket, .readFirst)
+        XCTAssertEqual(value.items.first { $0.paperID == "broad" }?.bucket, .skim)
+        XCTAssertTrue(value.items.first?.reasons.contains { $0.contains("neural ode") } == true)
+    }
 }
