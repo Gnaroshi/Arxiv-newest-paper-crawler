@@ -18,10 +18,14 @@ The main window answers five questions without opening another screen: what the 
 
 The minimum window is 900×620. Text wraps before controls compress. The candidate and detail columns remain independently scrollable.
 Calendar and Cleanup use the full workspace instead of an empty detail placeholder. Calendar search actions stay pinned below the scrollable dates; date-by-date progress, cancellation and errors appear beside those actions.
+The root workspace is constrained to the actual viewport. Cleanup owns a bounded scrolling body and a separate fixed footer; neither its empty state nor long candidate content can push controls beyond the window. Persisted list widths are clamped to leave at least 300 points for details. Below a 601-point workspace, list and detail become separate views. Explicit scope changes reset list position, not note drafts.
+
+Note edit state belongs to a small per-paper draft store observed only by the editor. Typing must not rebuild the browser index or sidebar counts. Saved/Unsaved and save failures appear beside the note, not as a banner that displaces the paper list. Closing with a draft requires an explicit save/discard/cancel choice.
 
 ## Performance and recovery
 
 Topic evidence and normalized searchable text are indexed when papers or rules change, not during SwiftUI row rendering. Search is debounced by 150 ms. Sidebar counts are cached. Trash is loaded on demand, and archive writes run off the UI thread with one mutation at a time. Cleanup archives metadata and a pre-change backup before compacting the live array; tombstones prevent deleted papers from silently reappearing during discovery.
+Clearing search restores the current scope immediately. Topic-rule indexing runs off-main and only the latest rule revision can install results. Re-selecting a viewed paper does not rewrite reading state. PDF availability is cached instead of reading the ownership file during view rendering. Cleanup feedback and discovery feedback are independent. Cleanup invalidates stale previews and compares the candidate IDs again before any backup/write.
 
 ## Shared application language
 

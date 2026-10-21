@@ -43,3 +43,38 @@ disk writes and final list installation can add a short tail beyond the network
 budget. A stalled filesystem cannot be solved by an HTTP timeout. Native startup
 still reads owned JSON synchronously; the expensive search/import/preview paths do
 not. Python compatibility commands are not claimed to have the native batch deadline.
+
+## Actual-app workflow review
+
+Continued on 2026-10-21 using the Developer ID-signed `/Applications/Arxiv Discovery.app`,
+not a mock screen. The real library was backed up before installation. Browsing
+was checked there without marking unread papers or modifying reading work.
+Recoverable write tests used the same views/model in the explicitly marked offline
+verification window: 7,003 active records and 6,534 existing Trash records. Fixture
+generation is a CoreChecks tool, not an application dependency.
+
+| Pass | Actual interaction and result | Fix or safety check |
+|---|---|---|
+| 1 | Switch VLA/World Models after scrolling; select a detail | Scope changes now reset the list to its top; repeated viewed selection skips writes; rows avoid repeated index/file work |
+| 2 | Edit a note, switch topics, scroll, return, save | Draft survives; save feedback stays beside the editor; typing does not invalidate the browser |
+| 3 | Resize to 900-point width; read a long title and scroll to the note | Persisted split widths are clamped, metadata reflows and detail scroll remains independent |
+| 4 | Open Cleanup at minimum size | Initially reproduced hidden header/footer even after an outer viewport fix. A pane-local geometry bound, scrolling body and ordinary pinned footer fixed the observed overflow; rechecked both empty and candidate states |
+| 5 | Cancel cleanup, then move two fixture papers; restore one in Trash, undo the remaining one | Active/Trash counts 7003/6534 → 7001/6536 → 7002/6535 → 7003/6534. Protected note retained. Older Trash records not restored |
+| 6 | Deselect every topic; rapidly reselect; toggle sidebar and appearance; close with an unsaved note | Empty topic selection blocks apply. Latest preview wins. Light/dark and 900/1180-point widths fit. Close warning cancels without losing the draft; Revert returns to saved text |
+| 7 | Clear search, scroll VLA twelve pages, switch World Models | Search clear restores the full scope; World Models starts with scrollbar at zero instead of inheriting the VLA offset |
+
+Local regression coverage includes eleven application-model tests in addition to
+the existing CoreChecks groups and 38 Python tests. The 7,000-record model test
+checks 24 topic switches; worst pairs were about 34–38 ms in observed debug runs.
+This measures filtering/model work, **not rendering FPS or a universal UI latency
+guarantee**. Actual scrolling was checked through the installed UI. A process
+sample after cleanup/restore showed the main thread idle in the event loop, not
+blocked by background work. No Gemini requests or PDF downloads were made during
+this interaction review, and permanent metadata deletion was not exercised.
+
+GitHub Actions was not run or queried. The workflow remains manual-only; validation,
+packaging, signature verification and installation were local.
+
+Application tests use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
+The standalone Command Line Tools attempt failed because its SDK lacked the
+SwiftUI macro plugin; the full-Xcode rerun passed all eleven tests.

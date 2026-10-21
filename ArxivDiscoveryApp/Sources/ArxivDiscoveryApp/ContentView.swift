@@ -284,7 +284,7 @@ struct ContentView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(scopeTitle)
                     .font(.title2.weight(.bold))
-                Text("\(model.filteredPapers.count) papers")
+                Text("\(model.filteredPapers.count) \(model.filteredPapers.count == 1 ? "paper" : "papers")")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

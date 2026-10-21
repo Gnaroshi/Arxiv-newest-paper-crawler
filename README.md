@@ -25,6 +25,7 @@ Discovery does not download PDFs or call Gemini. Those actions happen only after
 
 - macOS 14+
 - Swift 5.9+
+- Full Xcode for SwiftUI builds and application tests (standalone Command Line Tools can lack SwiftUI macro plugins)
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)
 - A local Apple Development or Developer ID Application signing identity for stable installation
@@ -67,7 +68,9 @@ Adjacent selected dates share one range query; nonadjacent dates never include u
 
 Complete coverage and response pages are reused for six hours. **Retry unfinished dates** resumes partial pages; **Search options → Refresh selected dates (ignore saved results)** explicitly bypasses the cache. Partial dates remain marked as needing search. Large searches may require another run; a time/page limit is never reported as complete. `last-discovery.json` records the outcome without credentials.
 
-Open **Cleanup** to preview unrelated unread Inbox papers, then choose **Move unrelated to Trash**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Removed metadata leaves the active array and remains in **Trash**. Restore one paper there, or choose **Undo last cleanup** to restore the latest batch. Backups are written before changes. PDFs and notes are never deleted by cleanup.
+Open **Cleanup** to preview unrelated unread Inbox papers, then choose **Move N to Trash**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Removed metadata leaves the active array and remains in **Trash**. Restore one paper there, or choose **Undo last removal (N)** to restore the latest remaining batch; the confirmation shows its exact count. Older batches stay in Trash. Backups are written before changes. PDFs and notes are never deleted by cleanup. Changing topic rules invalidates the preview; only the reviewed candidate set can be applied.
+
+Switching a topic starts its list at the top. Narrow windows constrain the list/detail split; if there is not enough room for both, a single-pane detail has **Back to papers**. Notes keep their drafts across navigation. **Save note** persists a draft, **Revert** keeps the previously saved note, and closing with drafts asks whether to save, cancel, or discard them.
 
 Every row has bookmark (**Save for later**), checkmark (**Mark reviewed**) and trash (**Move to Trash**) actions with tooltips. Saving does not download a PDF. Reviewing does not clear bookmarks, collections or notes. The Delete key also moves the selected paper to Trash. In Trash, **Delete metadata…** explicitly confirms removal of the metadata row; downloaded PDFs, reading notes, backups and the rediscovery tombstone remain.
 
@@ -129,11 +132,22 @@ Studio uses the fixed executable bundled with the app:
 ## Development checks
 
 ```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
 uv run pytest
 uv run ruff check .
 swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks
+swift test --package-path ArxivDiscoveryApp
 swift build -c release --package-path ArxivDiscoveryApp
 ./ArxivDiscoveryApp/build_app.sh
 ```
+
+For safe actual-app workflow checks, export an offline fixture into a new directory under `~/Library/Caches/dev.gnaroshi.ArxivDiscovery/UIVerification/`:
+
+```bash
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+swift run --package-path ArxivDiscoveryApp ArxivDiscoveryCoreChecks --export-ui-fixture "$HOME/Library/Caches/dev.gnaroshi.ArxivDiscovery/UIVerification/my-check"
+```
+
+In the installed app, **Help → Diagnostics → Open verification library…** opens it with the same product views and model, isolated preferences, and no credentials or network. It contains 7,003 active papers, two cleanup candidates, and a protected note. Fixture creation refuses an existing destination. The diagnostics menu can resize this window and switch its appearance without changing the normal library. Synthetic fixture generation is not bundled in the app. See the local interaction checklist in [`docs/discovery-performance-review.md`](docs/discovery-performance-review.md).
 
 Product, architecture, design, distribution, compatibility, and rollback decisions are documented in [`docs/`](docs/).

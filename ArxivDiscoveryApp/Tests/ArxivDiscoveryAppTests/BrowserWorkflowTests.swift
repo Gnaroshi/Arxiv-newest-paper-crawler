@@ -60,6 +60,19 @@ import XCTest
         XCTAssertEqual(try Data(contentsOf: model.repository.libraryURL), before)
     }
 
+    func testClearingSearchImmediatelyRestoresCurrentTopicAndCancelsPendingQuery() async throws {
+        let (model, root, suite) = try fixture(7000)
+        defer { cleanup(root, suite) }
+        model.scope = .topic("vla")
+        model.searchText = "world model"
+        model.searchText = ""
+        XCTAssertEqual(model.filteredPapers.count, 3500)
+        model.scope = .topic(SmartTopic.worldModels.rawValue)
+        try await Task.sleep(for: .milliseconds(250))
+        XCTAssertEqual(model.filteredPapers.count, 3500)
+        XCTAssertTrue(model.filteredPapers.allSatisfy { $0.title.contains("World Models") })
+    }
+
     func testDraftSurvivesTopicSelectionAndSaveThenRevert() throws {
         let (model, root, suite) = try fixture()
         defer { cleanup(root, suite) }

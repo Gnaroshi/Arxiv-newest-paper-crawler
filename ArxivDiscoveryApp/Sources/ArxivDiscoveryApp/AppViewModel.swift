@@ -179,6 +179,10 @@ final class AppViewModel: ObservableObject {
 
     private func scheduleSearch() {
         searchTask?.cancel()
+        if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            refreshFilteredPapers()
+            return
+        }
         searchTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(150))
             guard !Task.isCancelled else { return }
@@ -389,7 +393,10 @@ final class AppViewModel: ObservableObject {
     }
 
     func restoreLastCleanup() {
-        mutateLibrary { repository in "Restored \(try repository.restoreLastTopicCleanup()) papers from the last cleanup." }
+        mutateLibrary { repository in
+            let count = try repository.restoreLastTopicCleanup()
+            return "Restored \(count) \(count == 1 ? "paper" : "papers") from the last removal."
+        }
     }
 
     func restoreExcluded(_ paper: Paper) {

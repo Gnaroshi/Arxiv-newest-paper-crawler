@@ -2,15 +2,24 @@
 
 ## Ownership
 
-`ArxivDiscoveryApp` is a Swift package with five targets:
+`ArxivDiscoveryApp` is a Swift package with five production/check targets and an application-model test target:
 
 - `ArxivDiscoveryCore`: arXiv Atom parsing, domain models, merge rules, local JSON storage, and safe status records.
 - `ArxivDiscoveryApp`: SwiftUI presentation, triage/collection/note state, calendar discovery, Keychain access, optional Gemini translation, explicit PDF download, and legacy import.
 - `ArxivDiscoveryIntegration`: fixed JSON status and private backup-export executable bundled with the app.
 - `ArxivDiscoveryMaintenance`: explicit local repair operations and a read-only search probe using an isolated temporary repository.
 - `ArxivDiscoveryCoreChecks`: local parser, workflow, storage, performance and adversarial network fixtures.
+- `ArxivDiscoveryAppTests`: headless tests of the real application model, draft ownership, revision handling, responsive pane metrics and cleanup prerequisites.
 
 The Python package continues to own its CLI collection path and the legacy repository-local `data/` layout. It does not serve UI.
+
+## Browser and validation ownership
+
+`NoteDraftStore` owns transient per-paper edits separately from the browser's published state. Saves persist a copy before publishing it; failed writes leave drafts and saved reading state intact. The application termination delegate checks for unsaved work.
+
+Topic edits build a revision-tagged index off-main. A newer revision invalidates older results. Bulk cleanup/restore prepares active and (only when needed) Trash indexes before installing a snapshot. Cleanup apply checks both topic rules and exact reviewed candidate IDs; it cannot silently apply a new preview. Individual restore shrinks the remaining undo batch.
+
+`VerificationWindowController` hosts the same `ContentView` and `AppViewModel` on an explicitly selected fixture below the app's verification cache. The fixture marker and path are validated, preferences use a temporary suite, and its model blocks credentials, discovery, translation, download and external paper actions. The application target does not generate fixture data. Fixture generation belongs only to `ArxivDiscoveryCoreChecks`; it never writes the canonical library. A geometry diagnostic writes view frames only into that fixture folder.
 
 ## Native data
 
