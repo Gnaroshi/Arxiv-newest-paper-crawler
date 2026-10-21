@@ -20,6 +20,7 @@ storage and provider compatibility; local build/install and workflow triggers.
 | Repeated outage | Error details discarded; next day repeated failure | Typed 429/5xx/timeout/feed/storage states; cooldown/circuit breaker |
 | Invalid feed | HTML/error entry could become empty success | Reject non-feed roots, invalid entries, DTDs and missing valid result metadata |
 | UI stalls | Discovery merge/JSON and bulk preview/import on main actor | Discovery actor and background bulk operations; visible elapsed/progress/cancel |
+| Hidden actions | Restored oversized window could push actions below the display | Clamp restored non-fullscreen frames to visible area; safe-area-pinned action footer |
 | Ambiguous acronym | Astronomy VLA pages fetched then discarded | Robotics context applied both remotely and locally |
 | Data races | Overlapping library/search operations | One discovery owner; mutation prerequisites enforced in model and UI |
 | PDF data loss | Same-title destination overwritten | Ownership index; no replacement of reading copies; bounded streaming |

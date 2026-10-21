@@ -10,7 +10,6 @@ struct DiscoveryCalendarView: View {
     private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
 
     var body: some View {
-        VStack(spacing: 0) {
           ScrollView {
           VStack(alignment: .leading, spacing: 16) {
             DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
@@ -57,9 +56,14 @@ struct DiscoveryCalendarView: View {
             }.font(.caption)
           }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
           }
-          Divider()
-          discoveryFooter.padding(16)
-        }
+          .safeAreaInset(edge: .bottom, spacing: 0) {
+              VStack(spacing: 0) {
+                  Divider()
+                  discoveryFooter.padding(16)
+              }
+              .fixedSize(horizontal: false, vertical: true)
+              .background(AppTheme.canvas(for: colorScheme))
+          }
         .background(AppTheme.canvas(for: colorScheme))
     }
 
