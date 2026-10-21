@@ -28,52 +28,54 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 
 @MainActor
 final class AppSettings: ObservableObject {
+    private let defaults: UserDefaults
     static let categories = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.RO", "cs.NE", "stat.ML"]
     static let defaultGeminiModel = "gemini-3.5-flash"
 
     @Published var discoveryMode: DiscoveryMode {
-        didSet { UserDefaults.standard.set(discoveryMode.rawValue, forKey: "discoveryMode") }
+        didSet { defaults.set(discoveryMode.rawValue, forKey: "discoveryMode") }
     }
 
     @Published var enabledTopics: Set<SmartTopic> {
-        didSet { UserDefaults.standard.set(enabledTopics.map(\.rawValue).sorted(), forKey: "enabledTopics") }
+        didSet { defaults.set(enabledTopics.map(\.rawValue).sorted(), forKey: "enabledTopics") }
     }
 
     @Published var researchTopics: [ResearchTopic] {
         didSet {
-            if let data = try? JSONEncoder().encode(researchTopics) { UserDefaults.standard.set(data, forKey: "researchTopics") }
+            if let data = try? JSONEncoder().encode(researchTopics) { defaults.set(data, forKey: "researchTopics") }
         }
     }
     @Published var selectedTopicIDs: Set<String> {
-        didSet { UserDefaults.standard.set(selectedTopicIDs.sorted(), forKey: "selectedTopicIDs") }
+        didSet { defaults.set(selectedTopicIDs.sorted(), forKey: "selectedTopicIDs") }
     }
     var selectedTopics: [ResearchTopic] { researchTopics.filter { selectedTopicIDs.contains($0.id) } }
 
     @Published var enabledCategories: Set<String> {
-        didSet { UserDefaults.standard.set(enabledCategories.sorted(), forKey: "enabledCategories") }
+        didSet { defaults.set(enabledCategories.sorted(), forKey: "enabledCategories") }
     }
 
     @Published var appearance: AppAppearance {
-        didSet { UserDefaults.standard.set(appearance.rawValue, forKey: "appearance") }
+        didSet { defaults.set(appearance.rawValue, forKey: "appearance") }
     }
 
     @Published var geminiModel: String {
-        didSet { UserDefaults.standard.set(geminiModel, forKey: "geminiModel") }
+        didSet { defaults.set(geminiModel, forKey: "geminiModel") }
     }
 
     @Published var pdfNameStyle: PDFNameStyle {
-        didSet { UserDefaults.standard.set(pdfNameStyle.rawValue, forKey: "pdfNameStyle") }
+        didSet { defaults.set(pdfNameStyle.rawValue, forKey: "pdfNameStyle") }
     }
 
     @Published var cacheRetentionDays: Int {
-        didSet { UserDefaults.standard.set(cacheRetentionDays, forKey: "cacheRetentionDays") }
+        didSet { defaults.set(cacheRetentionDays, forKey: "cacheRetentionDays") }
     }
 
-    init() {
-        discoveryMode = DiscoveryMode(rawValue: UserDefaults.standard.string(forKey: "discoveryMode") ?? "") ?? .topics
-        let storedTopics = UserDefaults.standard.stringArray(forKey: "enabledTopics")
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        discoveryMode = DiscoveryMode(rawValue: defaults.string(forKey: "discoveryMode") ?? "") ?? .topics
+        let storedTopics = defaults.stringArray(forKey: "enabledTopics")
         enabledTopics = storedTopics.map { Set($0.compactMap(SmartTopic.init(rawValue:))) } ?? Set(SmartTopic.allCases)
-        let storedRules = UserDefaults.standard.data(forKey: "researchTopics").flatMap { try? JSONDecoder().decode([ResearchTopic].self, from: $0) } ?? ResearchTopic.defaults
+        let storedRules = defaults.data(forKey: "researchTopics").flatMap { try? JSONDecoder().decode([ResearchTopic].self, from: $0) } ?? ResearchTopic.defaults
         let oldWorldTerms = Set(["world model", "world models", "world modelling", "world modeling", "world action model"])
         researchTopics = storedRules.map { rule in
             guard rule.id == SmartTopic.worldModels.rawValue, Set(rule.anyTerms) == oldWorldTerms,
@@ -82,13 +84,13 @@ final class AppSettings: ObservableObject {
             migrated.anyTerms = updated.anyTerms
             return migrated
         }
-        selectedTopicIDs = Set(UserDefaults.standard.stringArray(forKey: "selectedTopicIDs") ?? storedTopics ?? SmartTopic.allCases.map(\.rawValue))
-        let storedCategories = UserDefaults.standard.stringArray(forKey: "enabledCategories")
+        selectedTopicIDs = Set(defaults.stringArray(forKey: "selectedTopicIDs") ?? storedTopics ?? SmartTopic.allCases.map(\.rawValue))
+        let storedCategories = defaults.stringArray(forKey: "enabledCategories")
         enabledCategories = storedCategories.map(Set.init) ?? Set(Self.categories)
-        appearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system
-        geminiModel = UserDefaults.standard.string(forKey: "geminiModel") ?? Self.defaultGeminiModel
-        pdfNameStyle = PDFNameStyle(rawValue: UserDefaults.standard.string(forKey: "pdfNameStyle") ?? "") ?? .title
-        let retention = UserDefaults.standard.integer(forKey: "cacheRetentionDays")
+        appearance = AppAppearance(rawValue: defaults.string(forKey: "appearance") ?? "") ?? .system
+        geminiModel = defaults.string(forKey: "geminiModel") ?? Self.defaultGeminiModel
+        pdfNameStyle = PDFNameStyle(rawValue: defaults.string(forKey: "pdfNameStyle") ?? "") ?? .title
+        let retention = defaults.integer(forKey: "cacheRetentionDays")
         cacheRetentionDays = (30...365).contains(retention) ? retention : 60
     }
 }

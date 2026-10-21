@@ -20,10 +20,7 @@ struct ContentView: View {
             if model.scope == .calendar || model.scope == .cleanup {
                 candidateColumn
             } else {
-                HSplitView {
-                    candidateColumn.frame(minWidth: 340, idealWidth: 440, maxWidth: 620)
-                    detailColumn.frame(minWidth: 280, maxWidth: .infinity, maxHeight: .infinity)
-                }
+                paperWorkspace
             }
         }
         .navigationSplitViewStyle(.balanced)
@@ -75,6 +72,29 @@ struct ContentView: View {
         }
         .onChange(of: model.selectedPaperID) { model.recordSelection() }
         .onChange(of: model.scope) { model.reconcileSelection() }
+    }
+
+    private var paperWorkspace: some View {
+        GeometryReader { geometry in
+            let metrics = PaperWorkspaceMetrics(width: geometry.size.width)
+            if model.filteredPapers.isEmpty || model.isLoadingTrash || model.isIndexingTopics {
+                candidateColumn
+            } else if metrics.sideBySide {
+                HSplitView {
+                    candidateColumn.frame(minWidth: 280, idealWidth: min(360, metrics.maximumListWidth), maxWidth: metrics.maximumListWidth)
+                    detailColumn.frame(minWidth: 300, maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else if model.selectedPaper != nil {
+                VStack(spacing: 0) {
+                    HStack {
+                        Button { model.selectedPaperID = nil } label: { Label("Back to papers", systemImage: "chevron.left") }
+                        Spacer()
+                    }.padding(12)
+                    Divider()
+                    detailColumn
+                }
+            } else { candidateColumn }
+        }
     }
 
     private var sidebar: some View {
@@ -201,7 +221,9 @@ struct ContentView: View {
                     }
                 }
 
-                if model.isLoadingTrash {
+                if model.isIndexingTopics {
+                    ProgressView("Updating topics…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if model.isLoadingTrash {
                     ProgressView("Loading Trash…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if model.papers.isEmpty && model.scope != .excluded {
                     emptyState
@@ -223,6 +245,7 @@ struct ContentView: View {
                             onTrash: { model.moveToTrash(paper) },
                             onRestore: { model.restoreExcluded(paper) }
                         )
+                        .equatable()
                         .disabled(!model.canChangeLibrary)
                         .tag(paper.shortID)
                         .contextMenu {
@@ -242,6 +265,7 @@ struct ContentView: View {
                         }
                     }
                     .listStyle(.inset)
+                    .id(model.scope)
                     .onDeleteCommand {
                         guard let paper = model.selectedPaper else { return }
                         if model.scope == .excluded { deletingPaper = paper } else { model.moveToTrash(paper) }
@@ -310,7 +334,7 @@ struct ContentView: View {
                 Divider()
             }
             PaperDetailView(model: model, paper: paper)
-                .id(paper.shortID + (paper.abstractKO ?? "") + model.progress(for: paper).note)
+                .id(paper.shortID)
           }
         } else {
             ContentUnavailableView(
@@ -351,7 +375,7 @@ struct ContentView: View {
     }
 }
 
-private struct PaperRow: View {
+private struct PaperRow: View, Equatable {
     @Environment(\.colorScheme) private var colorScheme
     let paper: Paper
     let progress: PaperProgress
@@ -362,6 +386,10 @@ private struct PaperRow: View {
     let onRestore: () -> Void
     private var isSaved: Bool { progress.savedAt != nil || progress.disposition == .saved }
     private var isReviewed: Bool { progress.reviewedAt != nil || progress.disposition == .reviewed }
+
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.paper == rhs.paper && lhs.progress == rhs.progress && lhs.isTrashed == rhs.isTrashed
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {

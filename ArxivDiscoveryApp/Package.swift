@@ -36,6 +36,11 @@ let package = Package(
             name: "ArxivDiscoveryCoreChecks",
             dependencies: ["ArxivDiscoveryCore"],
             path: "Sources/ArxivDiscoveryCoreChecks"
+        ),
+        .testTarget(
+            name: "ArxivDiscoveryAppTests",
+            dependencies: ["ArxivDiscoveryApp", "ArxivDiscoveryCore"],
+            path: "Tests/ArxivDiscoveryAppTests"
         )
     ]
 )

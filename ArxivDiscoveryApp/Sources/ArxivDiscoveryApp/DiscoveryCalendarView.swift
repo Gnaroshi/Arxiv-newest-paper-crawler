@@ -69,8 +69,8 @@ struct DiscoveryCalendarView: View {
 
     private var discoveryFooter: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if let message = model.errorMessage ?? model.notice {
-                Text(message).font(.callout).foregroundStyle(model.errorMessage == nil ? Color.secondary : Color.red)
+            if let message = model.discoveryError ?? model.discoveryNotice {
+                Text(message).font(.callout).foregroundStyle(model.discoveryError == nil ? Color.secondary : Color.red)
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let progress = model.discoveryProgress { Text(progress).font(.caption).foregroundStyle(.secondary) }
@@ -104,7 +104,7 @@ struct DiscoveryCalendarView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-                .disabled(model.selectedDiscoveryDays.isEmpty || !model.canChangeLibrary || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
+                .disabled(model.isVerification || model.selectedDiscoveryDays.isEmpty || !model.canChangeLibrary || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
                 if model.isDiscovering { Button("Cancel search") { model.cancelDiscovery() } }
                 else {
                     HStack {

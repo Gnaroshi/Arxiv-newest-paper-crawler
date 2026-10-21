@@ -25,6 +25,10 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var translationUsage = TranslationUsageLedger()
     @Published private(set) var cleanupState = TopicCleanupState()
     @Published private(set) var cleanupPreview: TopicCleanupPreview?
+    @Published private(set) var cleanupMessage: String?
+    @Published private(set) var cleanupError: String?
+    @Published private(set) var isPreviewingCleanup = false
+    @Published private(set) var lastRemovalCount = 0
     @Published private(set) var isCleaning = false
     @Published private(set) var availableGeminiModels: [GeminiModel] = []
     @Published private(set) var isLoadingModels = false
@@ -41,6 +45,10 @@ final class AppViewModel: ObservableObject {
     private var trashLoaded = false
     private var searchIndex = PaperSearchIndex(papers: [], topics: [])
     private var preparedIndex: PaperSearchIndex?
+    @Published private(set) var isIndexingTopics = false
+    private var indexingTask: Task<Void, Never>?
+    private var indexRevision = UUID()
+    @Published private(set) var localPDFs: [String: URL] = [:]
     private var byID: [String: Paper] = [:]
     private var cachedCollectionCounts: [String: Int] = [:]
     @Published private(set) var inboxCount = 0
@@ -58,6 +66,8 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var discoveryTotalDays = 0
     @Published private(set) var discoveryReceivedPapers = 0
     @Published private(set) var discoveryReport: DiscoveryRunReport?
+    @Published private(set) var discoveryNotice: String?
+    @Published private(set) var discoveryError: String?
     private var discoveryTask: Task<Void, Never>?
     @Published private(set) var translatingPaperID: String?
     @Published private(set) var downloadingPaperID: String?
@@ -67,6 +77,8 @@ final class AppViewModel: ObservableObject {
 
     let settings: AppSettings
     let repository: PaperRepository
+    let isVerification: Bool
+    let noteDrafts = NoteDraftStore()
     private let client: ArxivSearching
     private let discovery: DiscoverySearch
     private let gemini = GeminiClient()
@@ -77,15 +89,17 @@ final class AppViewModel: ObservableObject {
         settings: AppSettings,
         repository: PaperRepository = PaperRepository(),
         client: ArxivSearching = ArxivClient(),
+        isVerification: Bool = false,
         version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.0"
     ) {
         self.settings = settings
         self.repository = repository
+        self.isVerification = isVerification
         self.client = client
         self.discovery = DiscoverySearch(repository: repository, client: client)
         self.version = version
         load()
-        topicSubscription = settings.$researchTopics.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.rebuildIndex() }
+        topicSubscription = settings.$researchTopics.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.reindexTopics() }
     }
 
     var favorites: Set<String> { library.savedPaperIDs }
@@ -131,6 +145,9 @@ final class AppViewModel: ObservableObject {
     }
 
     private func rebuildIndex() {
+        indexingTask?.cancel()
+        indexRevision = UUID()
+        isIndexingTopics = false
         activePapers = papers.filter { cleanupState.excluded[$0.shortID] == nil }
         byID = Dictionary(activePapers.map { ($0.shortID, $0) }, uniquingKeysWith: { _, last in last })
         searchIndex = preparedIndex ?? PaperSearchIndex(papers: activePapers, topics: settings.researchTopics)
@@ -139,6 +156,25 @@ final class AppViewModel: ObservableObject {
         observedSubjects = AppSettings.categories.filter { subjects.contains($0) }
         rebuildCounts()
         refreshFilteredPapers()
+    }
+
+    private func reindexTopics() {
+        indexingTask?.cancel()
+        let revision = UUID()
+        indexRevision = revision
+        let values = activePapers
+        let rules = settings.researchTopics
+        isIndexingTopics = true
+        indexingTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(80))
+            guard !Task.isCancelled else { return }
+            let index = await Task.detached(priority: .userInitiated) { PaperSearchIndex(papers: values, topics: rules) }.value
+            guard let self, !Task.isCancelled, indexRevision == revision else { return }
+            searchIndex = index
+            isIndexingTopics = false
+            refreshFilteredPapers()
+            if scope == .cleanup { previewCleanup() }
+        }
     }
 
     private func scheduleSearch() {
@@ -181,7 +217,7 @@ final class AppViewModel: ObservableObject {
     }
 
     var canChangeLibrary: Bool {
-        !isDiscovering && !isCleaning && !isLoadingTrash && translatingPaperID == nil && downloadingPaperID == nil && !ShowcaseMode.isEnabled
+        !isDiscovering && !isCleaning && !isLoadingTrash && !isIndexingTopics && translatingPaperID == nil && downloadingPaperID == nil && !ShowcaseMode.isEnabled
     }
 
     var unsearchedRecentCount: Int {
@@ -204,10 +240,10 @@ final class AppViewModel: ObservableObject {
     }
 
     func recordSelection() {
-        guard let selectedPaperID, scope != .excluded else { return }
-        let before = library.progress(for: selectedPaperID).firstViewedAt
+        guard let selectedPaperID, scope != .excluded, !isCleaning,
+              library.papers[selectedPaperID]?.firstViewedAt == nil else { return }
         library.markViewed(selectedPaperID)
-        if before == nil { persistLibrary() }
+        persistLibrary()
     }
 
     func reconcileSelection() {
@@ -218,16 +254,17 @@ final class AppViewModel: ObservableObject {
     }
 
     func searchSelectedDates(forceRefresh: Bool = false, only days: [String]? = nil) {
+        guard !isVerification else { discoveryError = "The verification library is offline."; return }
         guard canChangeLibrary else {
-            notice = "Finish the current library operation before starting a search."
+            discoveryNotice = "Finish the current library operation before starting a search."
             return
         }
         guard settings.discoveryMode != .topics || !settings.selectedTopics.isEmpty else {
-            errorMessage = "Select at least one research topic."
+            discoveryError = "Select at least one research topic."
             return
         }
         guard settings.discoveryMode != .categories || !settings.enabledCategories.isEmpty else {
-            errorMessage = "Select at least one arXiv category."
+            discoveryError = "Select at least one arXiv category."
             return
         }
         let validKeys = Set(days ?? Array(selectedDiscoveryDays))
@@ -237,7 +274,7 @@ final class AppViewModel: ObservableObject {
             }
             .sorted()
         guard !validKeys.isEmpty else {
-            errorMessage = "Select at least one date."
+            discoveryError = "Select at least one date."
             return
         }
 
@@ -247,8 +284,8 @@ final class AppViewModel: ObservableObject {
         discoveryCompletedDays = 0
         discoveryTotalDays = validKeys.count
         discoveryReceivedPapers = 0
-        errorMessage = nil
-        notice = nil
+        discoveryError = nil
+        discoveryNotice = nil
         guard let interval = DiscoveryDate.interval(for: validKeys[0]) else { isDiscovering = false; return }
         let query = DiscoveryQuery(interval: interval, categories: settings.enabledCategories.sorted(), mode: settings.discoveryMode, researchTopics: settings.selectedTopics)
         var policy = DiscoveryPolicy()
@@ -273,19 +310,19 @@ final class AppViewModel: ObservableObject {
                 lastRefresh = snapshot.history.days.values.map(\.lastSearchedAt).max()
                 let kept = "\(report.receivedPapers) matching papers saved · \(String(format: "%.1f", report.elapsedSeconds))s."
                 if report.storageFailed {
-                    errorMessage = "\(report.failures.last?.message ?? "Search results could not be fully saved.") Check local storage before retrying."
+                    discoveryError = "\(report.failures.last?.message ?? "Search results could not be fully saved.") Check local storage before retrying."
                 } else if report.pendingDays.isEmpty {
-                    notice = report.requestCount == 0 ? "Using saved results for \(report.cachedDays.count) dates. No network requests." : "Search complete. \(kept)"
+                    discoveryNotice = report.requestCount == 0 ? "Using saved results for \(report.cachedDays.count) dates. No network requests." : "Search complete. \(kept)"
                 } else if report.cancelled {
-                    notice = "Search cancelled. \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryNotice = "Search cancelled. \(kept) \(report.pendingDays.count) dates unfinished."
                 } else if report.timedOut {
-                    errorMessage = "Search stopped at the overall time limit. \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryError = "Search stopped at the overall time limit. \(kept) \(report.pendingDays.count) dates unfinished."
                 } else {
-                    errorMessage = "\(report.failures.first?.message ?? "More results remain; retry unfinished dates.") \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryError = "\(report.failures.first?.message ?? "More results remain; retry unfinished dates.") \(kept) \(report.pendingDays.count) dates unfinished."
                 }
                 try? writeStatus(availability: report.pendingDays.isEmpty ? "ready" : "partial")
             } catch {
-                errorMessage = "The search could not finish. Existing papers are kept. \(error.localizedDescription)"
+                discoveryError = "The search could not finish. Existing papers are kept. \(error.localizedDescription)"
                 try? writeStatus(availability: papers.isEmpty ? "unavailable" : "partial", errorCode: "discovery_save_failed")
             }
         }
@@ -307,30 +344,46 @@ final class AppViewModel: ObservableObject {
     }
 
     func previewCleanup() {
-        guard canChangeLibrary else { return }
         cleanupPreview = nil
+        guard canChangeLibrary else { return }
+        cleanupError = nil
+        guard !settings.selectedTopics.isEmpty else {
+            cleanupError = "Select at least one research topic to keep."
+            return
+        }
         isCleaning = true
+        isPreviewingCleanup = true
         let repository = repository
         let papers = papers
         let library = library
         let state = cleanupState
         let rules = settings.selectedTopics
         Task {
-            defer { isCleaning = false }
+            defer {
+                isCleaning = false
+                isPreviewingCleanup = false
+                if settings.selectedTopics != rules, scope == .cleanup { previewCleanup() }
+            }
             do {
                 let preview = try await Task.detached(priority: .userInitiated) {
                     try repository.previewTopicCleanup(topics: [], papers: papers, library: library, state: state, researchTopics: rules)
                 }.value
                 cleanupPreview = settings.selectedTopics == rules ? preview : nil
-            } catch { errorMessage = error.localizedDescription }
+            } catch { cleanupError = "The preview could not be prepared. Your library is unchanged. \(error.localizedDescription)" }
         }
     }
 
     func applyCleanup() {
         let rules = settings.selectedTopics
+        guard let preview = cleanupPreview, preview.researchTopics == rules,
+              !preview.candidates.isEmpty else {
+            cleanupError = "The preview changed. Refresh it before moving papers."
+            return
+        }
+        let expectedIDs = Set(preview.candidates.map(\.paperID))
         let version = version
         mutateLibrary { repository in
-            let result = try repository.applyTopicCleanup(topics: [], applicationVersion: version, researchTopics: rules)
+            let result = try repository.applyTopicCleanup(topics: [], applicationVersion: version, researchTopics: rules, expectedCandidateIDs: expectedIDs)
             return "Moved \(result.excludedCount) unrelated papers to Trash. Restore them anytime."
         }
     }
@@ -367,31 +420,49 @@ final class AppViewModel: ObservableObject {
         }
         isCleaning = true
         let repository = repository
+        let rules = settings.researchTopics
+        let needsTrash = trashLoaded || scope == .excluded
+        let fromCleanup = scope == .cleanup
+        cleanupError = nil
         Task {
-            defer { isCleaning = false }
+            var succeeded = false
+            defer {
+                isCleaning = false
+                if succeeded, fromCleanup, scope == .cleanup { previewCleanup() }
+            }
             do {
                 let result = try await Task.detached(priority: .userInitiated) {
                     let message = try operation(repository)
-                    let trash = try repository.loadTrashPapers()
-                    return (message, try repository.loadPapers(), try repository.loadCleanupState(), trash, PaperSearchIndex(papers: trash, topics: []).textByID)
+                    let trash = needsTrash ? try repository.loadTrashPapers() : []
+                    let latest = try repository.loadPapers()
+                    let state = try repository.loadCleanupState()
+                    return (message, latest, state, trash, PaperSearchIndex(papers: trash, topics: []).textByID,
+                            PaperSearchIndex(papers: latest.filter { state.excluded[$0.shortID] == nil }, topics: rules))
                 }.value
                 cleanupState = result.2
+                preparedIndex = settings.researchTopics == rules ? result.5 : nil
                 papers = result.1
-                trashPapers = result.3
-                trashSearchText = result.4
-                trashLoaded = true
-                excludedCount = trashPapers.count
+                if needsTrash {
+                    trashPapers = result.3
+                    trashSearchText = result.4
+                    trashLoaded = true
+                }
+                excludedCount = cleanupState.excluded.values.filter { $0.metadataDeleted != true }.count
+                refreshLastRemovalCount()
                 refreshFilteredPapers()
                 reconcileSelection()
                 cleanupPreview = nil
                 notice = result.0
+                if fromCleanup { cleanupMessage = result.0 }
+                succeeded = true
                 try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
             } catch {
                 // A partial write is recoverable from the archive/backup. Re-read
                 // the live state without changing the user's current view.
-                if let state = try? repository.loadCleanupState() { cleanupState = state }
-                if let latest = try? repository.loadPapers() { papers = latest }
-                errorMessage = "The library change could not finish. Your backup and PDF files are kept. \(error.localizedDescription)"
+                let message = "The library change could not finish. Your backup and PDF files are kept. \(error.localizedDescription)"
+                let latest = try? await Task.detached { (try repository.loadPapers(), try repository.loadCleanupState()) }.value
+                if let latest { cleanupState = latest.1; papers = latest.0; refreshLastRemovalCount() }
+                if fromCleanup { cleanupError = message } else { errorMessage = message }
             }
         }
     }
@@ -443,8 +514,41 @@ final class AppViewModel: ObservableObject {
     func saveNote(_ note: String, for paper: Paper) {
         guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
-        library.setNote(note, paperID: paper.shortID)
-        persistLibrary(notice: "Note saved.")
+        var updated = library
+        updated.setNote(note, paperID: paper.shortID)
+        do {
+            try repository.saveLibraryState(updated)
+            library = updated
+            noteDrafts.values.discard(paper.shortID)
+            notice = "Note saved."
+            try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
+        } catch { errorMessage = "The note could not be saved. Your draft is kept. \(error.localizedDescription)" }
+    }
+
+    private func refreshLastRemovalCount() {
+        guard let id = cleanupState.latestBatchID else { lastRemovalCount = 0; return }
+        lastRemovalCount = cleanupState.excluded.values.filter { $0.batchID == id && $0.metadataDeleted != true }.count
+    }
+
+    func prepareToClose() -> Bool {
+        guard !noteDrafts.values.isEmpty else { return true }
+        let alert = NSAlert()
+        alert.messageText = "Unsaved notes"
+        alert.informativeText = "Save your drafts before closing, or discard the unsaved changes."
+        alert.addButton(withTitle: "Save notes")
+        alert.addButton(withTitle: "Cancel")
+        alert.addButton(withTitle: "Discard drafts")
+        switch alert.runModal() {
+        case .alertFirstButtonReturn:
+            guard canChangeLibrary else { return false }
+            for id in noteDrafts.values.editedIDs {
+                guard let paper = byID[id] else { return false }
+                saveNote(noteDrafts.values.text(for: id, saved: library.progress(for: id).note), for: paper)
+            }
+            return noteDrafts.values.isEmpty
+        case .alertThirdButtonReturn: noteDrafts.values = NoteDrafts(); return true
+        default: return false
+        }
     }
 
     func importLegacy(from url: URL) {
@@ -479,7 +583,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func translate(_ paper: Paper) {
-        guard canChangeLibrary else { return }
+        guard canChangeLibrary, !isVerification else { return }
         do {
             guard let apiKey = try keychain.read(), !apiKey.isEmpty else {
                 errorMessage = "Add a Gemini API key in Settings before translating."
@@ -509,7 +613,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func refreshGeminiModels() {
-        guard !isLoadingModels else { return }
+        guard !isLoadingModels, !isVerification else { return }
         do {
             guard let apiKey = try keychain.read(), !apiKey.isEmpty else {
                 geminiConfigured = false
@@ -536,13 +640,14 @@ final class AppViewModel: ObservableObject {
     }
 
     func geminiKeyDidChange() {
+        guard !isVerification else { return }
         geminiConfigured = (try? keychain.read())?.isEmpty == false
         if geminiConfigured { refreshGeminiModels() }
         else { availableGeminiModels = [] }
     }
 
     func downloadPDF(_ paper: Paper) {
-        guard canChangeLibrary, let url = paper.downloadablePDFURL else { return }
+        guard canChangeLibrary, !isVerification, let url = paper.downloadablePDFURL else { return }
         downloadingPaperID = paper.shortID
         errorMessage = nil
         Task {
@@ -561,6 +666,7 @@ final class AppViewModel: ObservableObject {
                     return try repository.storeDownloadedPDF(from: temporaryURL, for: paper, style: style)
                 }.value
                 notice = "PDF downloaded as \(destination.lastPathComponent)."
+                localPDFs[paper.shortID] = destination
                 NSWorkspace.shared.open(destination)
             } catch {
                 errorMessage = "PDF download failed. \(error.localizedDescription)"
@@ -569,19 +675,24 @@ final class AppViewModel: ObservableObject {
     }
 
     func openPDF(_ paper: Paper) {
-        if let local = repository.existingPDFURL(for: paper, preferredStyle: settings.pdfNameStyle) {
-            NSWorkspace.shared.open(local)
+        guard !isVerification else { return }
+        if let local = localPDFs[paper.shortID] {
+            if FileManager.default.fileExists(atPath: local.path) { NSWorkspace.shared.open(local) }
+            else {
+                localPDFs.removeValue(forKey: paper.shortID)
+                errorMessage = "The downloaded PDF is missing. Use Download PDF to retrieve it again."
+            }
         } else {
             downloadPDF(paper)
         }
     }
 
     func hasLocalPDF(_ paper: Paper) -> Bool {
-        repository.existingPDFURL(for: paper, preferredStyle: settings.pdfNameStyle) != nil
+        localPDFs[paper.shortID] != nil
     }
 
     func openPaper(_ paper: Paper) {
-        guard let url = paper.entryURL else { return }
+        guard !isVerification, let url = paper.entryURL else { return }
         NSWorkspace.shared.open(url)
     }
 
@@ -605,7 +716,9 @@ final class AppViewModel: ObservableObject {
         do {
             try repository.restoreExcludedPaper(paper.shortID)
             cleanupState = try repository.loadCleanupState()
+            refreshLastRemovalCount()
             papers = try repository.loadPapers()
+            localPDFs = try repository.existingPDFURLs(for: papers, preferredStyle: settings.pdfNameStyle)
             trashPapers.removeAll { $0.shortID == paper.shortID }
             excludedCount = max(0, excludedCount - 1)
             return true
@@ -631,16 +744,18 @@ final class AppViewModel: ObservableObject {
             return
         }
         do {
-            papers = try repository.loadPapers()
+            let loaded = try repository.loadPapers()
             library = try repository.loadLibraryState()
             discoveryHistory = try repository.loadDiscoveryHistory()
             translationUsage = try repository.loadTranslationUsage()
             cleanupState = try repository.loadCleanupState()
+            refreshLastRemovalCount()
             excludedCount = cleanupState.excluded.values.filter { $0.metadataDeleted != true }.count
-            rebuildIndex()
+            papers = loaded
+            localPDFs = try repository.existingPDFURLs(for: loaded, preferredStyle: settings.pdfNameStyle)
             selectedPaperID = nil
             lastRefresh = try repository.loadStatus()?.lastRefresh
-            geminiConfigured = (try? keychain.read())?.isEmpty == false
+            geminiConfigured = !isVerification && (try? keychain.read())?.isEmpty == false
             try repository.saveLibraryState(library)
             try writeStatus(availability: papers.isEmpty ? "empty" : "ready")
         } catch {

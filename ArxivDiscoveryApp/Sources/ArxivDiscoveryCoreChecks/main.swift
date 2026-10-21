@@ -296,6 +296,10 @@ private extension JSONEncoder {
 }
 
 do {
+    if let index = CommandLine.arguments.firstIndex(of: "--export-ui-fixture"), CommandLine.arguments.indices.contains(index + 1) {
+        try exportUIFixture(to: URL(fileURLWithPath: CommandLine.arguments[index + 1], isDirectory: true))
+        exit(EXIT_SUCCESS)
+    }
     try checkFeedParser()
     try checkMerge()
     try checkLegacyImport()

@@ -174,6 +174,7 @@ public struct PaperRepository: Sendable {
     }
 
     public func existingPDFURLs(for papers: [Paper], preferredStyle: PDFNameStyle) throws -> [String: URL] {
+        guard FileManager.default.fileExists(atPath: pdfsURL.path) else { return [:] }
         let index = try loadPDFIndex()
         let names = Set(index.values)
         var result: [String: URL] = [:]

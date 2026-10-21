@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    var prepareToTerminate: (() -> Bool)?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        prepareToTerminate?() == false ? .terminateCancel : .terminateNow
+    }
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         DispatchQueue.main.async {
@@ -31,6 +36,7 @@ struct ArxivDiscoveryApplication: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var settings: AppSettings
     @StateObject private var model: AppViewModel
+    @StateObject private var verification = VerificationWindowController()
 
     init() {
         let settings = AppSettings()
@@ -43,6 +49,9 @@ struct ArxivDiscoveryApplication: App {
             ContentView(model: model, settings: settings)
                 .frame(minWidth: 900, minHeight: 620)
                 .tint(AppTheme.sky)
+                .onAppear {
+                    appDelegate.prepareToTerminate = { model.prepareToClose() && verification.prepareToClose() }
+                }
         }
         .defaultSize(width: 1180, height: 760)
         .commands {
@@ -50,6 +59,14 @@ struct ArxivDiscoveryApplication: App {
                 Button("Search Selected Dates") { model.searchSelectedDates() }
                     .keyboardShortcut("r", modifiers: [.command])
                     .disabled(!model.canChangeLibrary)
+            }
+            CommandGroup(after: .help) {
+                Menu("Diagnostics") {
+                    Button("Open verification library…") { verification.chooseLibrary(appearance: settings.appearance) }
+                    Button("Verification window: minimum size") { verification.resize(width: 900, height: 620) }
+                    Button("Verification window: standard size") { verification.resize(width: 1180, height: 760) }
+                    Button("Verification window: toggle appearance") { verification.toggleAppearance() }
+                }
             }
         }
 

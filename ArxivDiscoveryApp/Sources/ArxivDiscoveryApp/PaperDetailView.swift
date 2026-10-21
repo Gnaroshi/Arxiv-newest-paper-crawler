@@ -5,7 +5,6 @@ struct PaperDetailView: View {
     @Environment(\.colorScheme) private var colorScheme
     @ObservedObject var model: AppViewModel
     let paper: Paper
-    @State private var note = ""
     @State private var creatingCollection = false
     @State private var collectionName = ""
 
@@ -26,14 +25,15 @@ struct PaperDetailView: View {
                     translationSection(translation)
                 }
                 Divider()
-                noteSection
+                NoteEditorView(drafts: model.noteDrafts, paperID: paper.shortID, saved: progress.note,
+                               editable: model.scope != .excluded, canSave: model.canChangeLibrary,
+                               onSave: { model.saveNote($0, for: paper) })
             }
             .frame(maxWidth: 760, alignment: .leading)
             .padding(24)
         }
         .background(AppTheme.canvas(for: colorScheme))
         .navigationTitle(paper.shortID)
-        .onAppear { note = progress.note }
         .alert("New collection", isPresented: $creatingCollection) {
             TextField("Collection name", text: $collectionName)
             Button("Cancel", role: .cancel) { collectionName = "" }
@@ -54,9 +54,9 @@ struct PaperDetailView: View {
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
 
-            HStack(spacing: 10) {
-                Label(paper.publishedAt.formatted(date: .long, time: .omitted), systemImage: "calendar")
-                Text(paper.shortID).textSelection(.enabled)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) { metadata }
+                VStack(alignment: .leading, spacing: 6) { metadata }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -73,6 +73,11 @@ struct PaperDetailView: View {
                 }
             }
         }
+    }
+
+    @ViewBuilder private var metadata: some View {
+        Label(paper.publishedAt.formatted(date: .long, time: .omitted), systemImage: "calendar")
+        Text(paper.shortID).textSelection(.enabled)
     }
 
     private var primaryDecision: some View {
@@ -144,6 +149,7 @@ struct PaperDetailView: View {
         Button { model.openPaper(paper) } label: {
             Label("Open on arXiv", systemImage: "arrow.up.right.square")
         }
+        .disabled(model.isVerification)
 
         Button { model.translate(paper) } label: {
             if model.translatingPaperID == paper.shortID {
@@ -152,7 +158,7 @@ struct PaperDetailView: View {
                 Label(paper.abstractKO == nil ? "Translate to Korean" : "Translate again", systemImage: "character.book.closed")
             }
         }
-        .disabled(!model.canChangeLibrary)
+        .disabled(!model.canChangeLibrary || model.isVerification)
 
         Button { model.openPDF(paper) } label: {
             if model.downloadingPaperID == paper.shortID {
@@ -161,7 +167,7 @@ struct PaperDetailView: View {
                 Label(model.hasLocalPDF(paper) ? "Open PDF" : "Download PDF", systemImage: model.hasLocalPDF(paper) ? "doc.richtext" : "arrow.down.circle")
             }
         }
-        .disabled(!model.canChangeLibrary)
+        .disabled(!model.canChangeLibrary || model.isVerification)
     }
 
     private var abstractSection: some View {
@@ -184,26 +190,6 @@ struct PaperDetailView: View {
         }
     }
 
-    private var noteSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("Note").font(.headline)
-                Spacer()
-                Button("Save note") { model.saveNote(note, for: paper) }
-                    .disabled(model.scope == .excluded || !model.canChangeLibrary || note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
-            }
-            TextEditor(text: $note)
-                .disabled(model.scope == .excluded)
-                .font(.body)
-                .frame(minHeight: 110)
-                .padding(8)
-                .scrollContentBackground(.hidden)
-                .background(AppTheme.panel(for: colorScheme))
-                .overlay { RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border(for: colorScheme)) }
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-                .accessibilityLabel("Paper note")
-        }
-    }
 }
 
 private struct FlowLayout: Layout {

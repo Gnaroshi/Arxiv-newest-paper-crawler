@@ -44,10 +44,12 @@ public struct TopicCleanupResult: Codable, Equatable, Sendable {
 public enum TopicCleanupError: LocalizedError {
     case emptyTopics
     case metadataUnavailable
+    case previewChanged
     public var errorDescription: String? {
         switch self {
         case .emptyTopics: "Select at least one research topic to keep."
         case .metadataUnavailable: "This metadata has been deleted. Use the pre-change backup to recover it."
+        case .previewChanged: "The library changed after the preview. Refresh the preview before moving papers."
         }
     }
 }
@@ -156,8 +158,9 @@ public extension PaperRepository {
         try previewTopicCleanup(topics: topics, papers: loadPapers(), library: loadLibraryState(), state: loadCleanupState(), researchTopics: researchTopics)
     }
 
-    func applyTopicCleanup(topics: [SmartTopic], applicationVersion: String, now: Date = Date(), researchTopics: [ResearchTopic]? = nil) throws -> TopicCleanupResult {
+    func applyTopicCleanup(topics: [SmartTopic], applicationVersion: String, now: Date = Date(), researchTopics: [ResearchTopic]? = nil, expectedCandidateIDs: Set<String>? = nil) throws -> TopicCleanupResult {
         let preview = try previewTopicCleanup(topics: topics, researchTopics: researchTopics)
+        if let expectedCandidateIDs, Set(preview.candidates.map(\.paperID)) != expectedCandidateIDs { throw TopicCleanupError.previewChanged }
         let batchID = UUID().uuidString
         let backupURL = try writeCleanupBackup(batchID: batchID)
         let encoder = Self.cleanupEncoder
