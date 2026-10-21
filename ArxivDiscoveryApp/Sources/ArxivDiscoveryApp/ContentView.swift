@@ -37,6 +37,7 @@ struct ContentView: View {
                         .disabled(!model.canChangeLibrary)
                     Button("Open data folder") { model.openDataFolder() }
                     Button("Manage research topics") { managingTopics = true }
+                        .disabled(model.isDiscovering || model.isCleaning)
                 } label: {
                     Label("Library options", systemImage: "ellipsis.circle")
                 }
@@ -75,6 +76,8 @@ struct ContentView: View {
         }
         .onChange(of: model.selectedPaperID) { model.recordSelection() }
         .onChange(of: model.scope) { model.reconcileSelection() }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.NSCalendarDayChanged)) { _ in model.reading.refreshIfNewDay() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in model.reading.refreshIfNewDay() }
     }
 
     private var paperWorkspace: some View {
@@ -104,6 +107,9 @@ struct ContentView: View {
         VStack(spacing: 0) {
             List(selection: $model.scope) {
                 Section("Discover") {
+                    Label("Today's reading", systemImage: "text.badge.star")
+                        .badge(model.reading.count(.readFirst))
+                        .tag(LibraryScope.today)
                     Label("Calendar", systemImage: "calendar")
                         .badge(model.unsearchedRecentCount)
                         .tag(LibraryScope.calendar)
@@ -160,6 +166,7 @@ struct ContentView: View {
                         Spacer()
                         Button { managingTopics = true } label: { Image(systemName: "slider.horizontal.3") }
                             .buttonStyle(.plain).help("Find, create or edit topics")
+                            .disabled(model.isDiscovering || model.isCleaning)
                     }
                 }
 
@@ -211,7 +218,8 @@ struct ContentView: View {
             CleanupView(model: model, settings: settings)
         } else {
             VStack(spacing: 0) {
-                listHeader
+                if model.scope == .today { ReadingReviewHeader(reading: model.reading) }
+                else { listHeader }
                 Divider()
 
                 if let errorMessage = model.errorMessage {
@@ -224,7 +232,9 @@ struct ContentView: View {
                     }
                 }
 
-                if model.isIndexingTopics {
+                if model.scope == .today && model.reading.plan == nil && model.reading.isUpdating {
+                    ProgressView("Preparing today's reading…").frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if model.isIndexingTopics {
                     ProgressView("Updating topics…").frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if model.isLoadingTrash {
                     ProgressView("Loading Trash…").frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -232,9 +242,9 @@ struct ContentView: View {
                     emptyState
                 } else if model.filteredPapers.isEmpty {
                     ContentUnavailableView(
-                        model.scope == .excluded ? "Trash is empty" : "No matching papers",
+                        model.scope == .today ? "No papers in this view" : (model.scope == .excluded ? "Trash is empty" : "No matching papers"),
                         systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text(model.scope == .excluded ? "Removed papers appear here until you restore or delete their metadata." : "Try another library view or search.")
+                        description: Text(model.scope == .today ? "Choose another reading view or adjust your focus. All papers remain in your library." : (model.scope == .excluded ? "Removed papers appear here until you restore or delete their metadata." : "Try another library view or search."))
                     )
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -246,7 +256,8 @@ struct ContentView: View {
                             onSave: { model.toggleSaved(paper) },
                             isTrashed: model.scope == .excluded,
                             onTrash: { model.moveToTrash(paper) },
-                            onRestore: { model.restoreExcluded(paper) }
+                            onRestore: { model.restoreExcluded(paper) },
+                            readingReason: model.scope == .today ? model.reading.byID[paper.shortID]?.reasons.first : nil
                         )
                         .equatable()
                         .disabled(!model.canChangeLibrary)
@@ -262,13 +273,18 @@ struct ContentView: View {
                             Button("Mark as reviewed") { model.markReviewed(paper) }
                             Button("Move to Inbox") { model.moveToInbox(paper) }
                             Button("Move to Trash", role: .destructive) { model.moveToTrash(paper) }
+                            Menu("Reading priority") {
+                                ForEach(ReadingChoice.allCases) { choice in
+                                    Button(choice.label) { model.reading.choose(choice, for: paper.shortID) }
+                                }
+                            }
                           }
                             Divider()
                             Button("Open on arXiv") { model.openPaper(paper) }
                         }
                     }
                     .listStyle(.inset)
-                    .id(model.scope)
+                    .id(PaperListIdentity(scope: model.scope, readingBucket: model.scope == .today ? model.reading.bucket : nil))
                     .onDeleteCommand {
                         guard let paper = model.selectedPaper else { return }
                         if model.scope == .excluded { deletingPaper = paper } else { model.moveToTrash(paper) }
@@ -363,6 +379,7 @@ struct ContentView: View {
 
     private var scopeTitle: String {
         switch model.scope {
+        case .today: "Today's reading"
         case .inbox: "Inbox"
         case .new: "New"
         case .reviewed: "Reviewed"
@@ -378,6 +395,11 @@ struct ContentView: View {
     }
 }
 
+private struct PaperListIdentity: Hashable {
+    let scope: LibraryScope
+    let readingBucket: ReadingBucket?
+}
+
 private struct PaperRow: View, Equatable {
     @Environment(\.colorScheme) private var colorScheme
     let paper: Paper
@@ -387,11 +409,12 @@ private struct PaperRow: View, Equatable {
     let isTrashed: Bool
     let onTrash: () -> Void
     let onRestore: () -> Void
+    let readingReason: String?
     private var isSaved: Bool { progress.savedAt != nil || progress.disposition == .saved }
     private var isReviewed: Bool { progress.reviewedAt != nil || progress.disposition == .reviewed }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
-        lhs.paper == rhs.paper && lhs.progress == rhs.progress && lhs.isTrashed == rhs.isTrashed
+        lhs.paper == rhs.paper && lhs.progress == rhs.progress && lhs.isTrashed == rhs.isTrashed && lhs.readingReason == rhs.readingReason
     }
 
     var body: some View {
@@ -422,6 +445,9 @@ private struct PaperRow: View, Equatable {
                 }
                 .font(.caption.weight(.medium))
                 .foregroundStyle(.secondary)
+                if let readingReason {
+                    Text(readingReason).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                }
             }
             Spacer(minLength: 4)
             VStack(spacing: 10) {

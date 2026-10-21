@@ -29,6 +29,10 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 @MainActor
 final class AppSettings: ObservableObject {
     private let defaults: UserDefaults
+    @Published private(set) var openTopicEditors = 0
+    var isManagingTopics: Bool { openTopicEditors > 0 }
+    func topicEditorOpened() { openTopicEditors += 1 }
+    func topicEditorClosed() { openTopicEditors = max(0, openTopicEditors - 1) }
     static let categories = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.RO", "cs.NE", "stat.ML"]
     static let defaultGeminiModel = "gemini-3.5-flash"
 

@@ -60,11 +60,12 @@ struct ArxivDiscoveryApplication: App {
                     if !verification.isFrontmost { model.searchSelectedDates() }
                 }
                     .keyboardShortcut("r", modifiers: [.command])
-                    .disabled(!model.canChangeLibrary)
+                    .disabled(!model.canChangeLibrary || settings.isManagingTopics)
             }
             CommandGroup(after: .help) {
                 Menu("Diagnostics") {
                     Button("Open verification library…") { verification.chooseLibrary(appearance: settings.appearance) }
+                    Button("Open public discovery verification library…") { verification.chooseLibrary(appearance: settings.appearance, publicDiscovery: true) }
                     Button("Verification window: minimum size") { verification.resize(width: 900, height: 620) }
                     Button("Verification window: standard size") { verification.resize(width: 1180, height: 760) }
                     Button("Verification window: toggle appearance") { verification.toggleAppearance() }

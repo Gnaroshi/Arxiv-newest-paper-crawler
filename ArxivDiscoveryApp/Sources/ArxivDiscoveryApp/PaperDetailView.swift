@@ -16,6 +16,7 @@ struct PaperDetailView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 header
+                if model.scope != .excluded { ReadingPriorityView(reading: model.reading, paperID: paper.shortID) }
                 if model.scope != .excluded { primaryDecision }
                 actions
                 Divider()

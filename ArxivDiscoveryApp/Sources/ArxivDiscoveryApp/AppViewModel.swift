@@ -4,6 +4,7 @@ import Foundation
 import Combine
 
 enum LibraryScope: Hashable {
+    case today
     case inbox
     case new
     case reviewed
@@ -35,7 +36,7 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var geminiConfigured = false
     @Published var selectedPaperID: String?
     @Published var selectedDiscoveryDays: Set<String> = [DiscoveryDate.key(for: Date())]
-    @Published var scope: LibraryScope = .inbox { didSet { scopeDidChange() } }
+    @Published var scope: LibraryScope = .today { didSet { scopeDidChange() } }
     @Published var searchText = "" { didSet { scheduleSearch() } }
     @Published private(set) var filteredPapers: [Paper] = []
     @Published private(set) var activePapers: [Paper] = []
@@ -58,6 +59,8 @@ final class AppViewModel: ObservableObject {
     @Published private(set) var excludedCount = 0
     @Published private(set) var observedSubjects: [String] = []
     private var topicSubscription: AnyCancellable?
+    private var readingSubscription: AnyCancellable?
+    private var selectedTopicsSubscription: AnyCancellable?
     private var searchTask: Task<Void, Never>?
     @Published private(set) var isDiscovering = false
     @Published private(set) var discoveryProgress: String?
@@ -78,9 +81,13 @@ final class AppViewModel: ObservableObject {
     let settings: AppSettings
     let repository: PaperRepository
     let isVerification: Bool
+    let canDiscover: Bool
+    private var retryScopeSignature: String?
     let noteDrafts = NoteDraftStore()
+    let reading: ReadingReviewModel
     private let client: ArxivSearching
     private let discovery: DiscoverySearch
+    private let discoveryPolicy: DiscoveryPolicy
     private let gemini = GeminiClient()
     private let keychain = KeychainStore()
     private let version: String
@@ -90,16 +97,28 @@ final class AppViewModel: ObservableObject {
         repository: PaperRepository = PaperRepository(),
         client: ArxivSearching = ArxivClient(),
         isVerification: Bool = false,
+        allowPublicVerificationDiscovery: Bool = false,
+        discoveryPolicy: DiscoveryPolicy = DiscoveryPolicy(),
         version: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.4.0"
     ) {
         self.settings = settings
         self.repository = repository
+        reading = ReadingReviewModel(repository: repository)
         self.isVerification = isVerification
+        canDiscover = !isVerification || (allowPublicVerificationDiscovery && VerificationLibrary.isValid(repository.rootURL))
         self.client = client
+        self.discoveryPolicy = discoveryPolicy
         self.discovery = DiscoverySearch(repository: repository, client: client)
         self.version = version
         load()
         topicSubscription = settings.$researchTopics.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.reindexTopics() }
+        selectedTopicsSubscription = settings.$selectedTopicIDs.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.refreshReading() }
+        readingSubscription = Publishers.CombineLatest(reading.$plan, reading.$bucket).dropFirst()
+            .receive(on: RunLoop.main).sink { [weak self] _ in
+                guard let self else { return }
+                if scope == .today { refreshFilteredPapers(); reconcileSelection() }
+                else { objectWillChange.send() }
+            }
     }
 
     var favorites: Set<String> { library.savedPaperIDs }
@@ -117,7 +136,7 @@ final class AppViewModel: ObservableObject {
     }
 
     private func refreshFilteredPapers() {
-        let source = scope == .excluded ? trashPapers : activePapers
+        let source = scope == .today ? reading.ids(reading.bucket).compactMap { byID[$0] } : (scope == .excluded ? trashPapers : activePapers)
         let query = ResearchTopic.normalize(searchText)
         filteredPapers = source.filter { paper in
             let excluded = cleanupState.excluded[paper.shortID] != nil
@@ -125,6 +144,7 @@ final class AppViewModel: ObservableObject {
             let progress = library.progress(for: paper.shortID)
             let matchesScope: Bool
             switch scope {
+            case .today: matchesScope = reading.byID[paper.shortID]?.bucket == reading.bucket
             case .inbox: matchesScope = progress.disposition == .inbox
             case .new: matchesScope = progress.disposition == .inbox && progress.firstViewedAt == nil
             case .reviewed: matchesScope = progress.reviewedAt != nil || progress.disposition == .reviewed
@@ -156,6 +176,7 @@ final class AppViewModel: ObservableObject {
         observedSubjects = AppSettings.categories.filter { subjects.contains($0) }
         rebuildCounts()
         refreshFilteredPapers()
+        refreshReading()
     }
 
     private func reindexTopics() {
@@ -173,8 +194,13 @@ final class AppViewModel: ObservableObject {
             searchIndex = index
             isIndexingTopics = false
             refreshFilteredPapers()
+            refreshReading()
             if scope == .cleanup { previewCleanup() }
         }
+    }
+
+    private func refreshReading() {
+        reading.update(papers: activePapers, library: library, topics: settings.selectedTopics, index: searchIndex)
     }
 
     private func scheduleSearch() {
@@ -258,7 +284,8 @@ final class AppViewModel: ObservableObject {
     }
 
     func searchSelectedDates(forceRefresh: Bool = false, only days: [String]? = nil) {
-        guard !isVerification else { discoveryError = "The verification library is offline."; return }
+        guard canDiscover else { discoveryError = "The verification library is offline."; return }
+        guard !settings.isManagingTopics else { discoveryError = "Finish editing topics before starting a search."; return }
         guard canChangeLibrary else {
             discoveryNotice = "Finish the current library operation before starting a search."
             return
@@ -292,7 +319,8 @@ final class AppViewModel: ObservableObject {
         discoveryNotice = nil
         guard let interval = DiscoveryDate.interval(for: validKeys[0]) else { isDiscovering = false; return }
         let query = DiscoveryQuery(interval: interval, categories: settings.enabledCategories.sorted(), mode: settings.discoveryMode, researchTopics: settings.selectedTopics)
-        var policy = DiscoveryPolicy()
+        retryScopeSignature = currentDiscoveryScopeSignature
+        var policy = discoveryPolicy
         policy.retentionDays = settings.cacheRetentionDays
         discoveryTask = Task { [self] in
             defer { isDiscovering = false; discoveryProgress = nil; discoveryTask = nil }
@@ -312,17 +340,18 @@ final class AppViewModel: ObservableObject {
                 papers = snapshot.papers
                 discoveryHistory = snapshot.history
                 lastRefresh = snapshot.history.days.values.map(\.lastSearchedAt).max()
-                let kept = "\(report.receivedPapers) matching papers saved · \(String(format: "%.1f", report.elapsedSeconds))s."
+                let kept = "\(report.addedPapers ?? report.receivedPapers) new · \(report.existingPapers ?? 0) already in library · \(String(format: "%.1f", report.elapsedSeconds))s."
+                let unfinished = "\(report.pendingDays.count) \(report.pendingDays.count == 1 ? "date" : "dates") unfinished."
                 if report.storageFailed {
                     discoveryError = "\(report.failures.last?.message ?? "Search results could not be fully saved.") Check local storage before retrying."
                 } else if report.pendingDays.isEmpty {
                     discoveryNotice = report.requestCount == 0 ? "Using saved results for \(report.cachedDays.count) dates. No network requests." : "Search complete. \(kept)"
                 } else if report.cancelled {
-                    discoveryNotice = "Search cancelled. \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryNotice = "Search cancelled. \(kept) \(unfinished)"
                 } else if report.timedOut {
-                    discoveryError = "Search stopped at the overall time limit. \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryError = "Search stopped at the overall time limit. \(kept) \(unfinished)"
                 } else {
-                    discoveryError = "\(report.failures.first?.message ?? "More results remain; retry unfinished dates.") \(kept) \(report.pendingDays.count) dates unfinished."
+                    discoveryError = "\(report.failures.first?.message ?? "More results remain; retry unfinished dates.") \(kept) \(unfinished)"
                 }
                 try? writeStatus(availability: report.pendingDays.isEmpty ? "ready" : "partial")
             } catch {
@@ -334,8 +363,20 @@ final class AppViewModel: ObservableObject {
 
     func cancelDiscovery() { discoveryTask?.cancel() }
 
+    private var currentDiscoveryScopeSignature: String {
+        DiscoveryScopeIdentity.signature(mode: settings.discoveryMode, categories: settings.enabledCategories, topics: settings.selectedTopics)
+    }
+
+    var canRetryDiscovery: Bool {
+        discoveryReport?.pendingDays.isEmpty == false && retryScopeSignature == currentDiscoveryScopeSignature
+    }
+
     func retryUnfinishedDates() {
         guard let report = discoveryReport, !report.pendingDays.isEmpty else { return }
+        guard canRetryDiscovery else {
+            discoveryError = "Topics changed since this search. Start a new search with the current topics; saved papers are kept."
+            return
+        }
         // Preserve range/page-cache identity; complete dates are reused locally.
         searchSelectedDates(only: report.selectedDays)
     }
@@ -526,6 +567,7 @@ final class AppViewModel: ObservableObject {
         do {
             try repository.saveLibraryState(updated)
             library = updated
+            refreshReading()
             noteDrafts.values.discard(paper.shortID)
             noteDrafts.errors.removeValue(forKey: paper.shortID)
             try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
@@ -712,6 +754,7 @@ final class AppViewModel: ObservableObject {
         do {
             try repository.saveLibraryState(library)
             if let notice { self.notice = notice }
+            if notice != nil { refreshReading() }
             try writeStatus(availability: papers.isEmpty ? "empty" : "ready")
         } catch {
             errorMessage = "Your library could not be updated. \(error.localizedDescription)"
@@ -754,6 +797,12 @@ final class AppViewModel: ObservableObject {
             let loaded = try repository.loadPapers()
             library = try repository.loadLibraryState()
             discoveryHistory = try repository.loadDiscoveryHistory()
+            discoveryReport = try? repository.loadLastDiscoveryReport()
+            retryScopeSignature = discoveryReport?.scopeSignature
+            if let report = discoveryReport, !report.pendingDays.isEmpty {
+                selectedDiscoveryDays = Set(report.selectedDays)
+                discoveryNotice = "Previous search has \(report.pendingDays.count) unfinished \(report.pendingDays.count == 1 ? "date" : "dates"). Saved papers are kept."
+            }
             translationUsage = try repository.loadTranslationUsage()
             cleanupState = try repository.loadCleanupState()
             refreshLastRemovalCount()

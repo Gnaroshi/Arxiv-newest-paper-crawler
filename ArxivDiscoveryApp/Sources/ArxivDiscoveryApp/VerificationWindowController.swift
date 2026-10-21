@@ -12,7 +12,7 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
     private var suiteName: String?
     var isFrontmost: Bool { window != nil && NSApp.keyWindow === window }
 
-    func chooseLibrary(appearance: AppAppearance) {
+    func chooseLibrary(appearance: AppAppearance, publicDiscovery: Bool = false) {
         if let window { window.makeKeyAndOrderFront(nil); return }
         let panel = NSOpenPanel()
         panel.title = "Open isolated verification library"
@@ -25,10 +25,17 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
         guard let defaults = UserDefaults(suiteName: name) else { return }
         let settings = AppSettings(defaults: defaults)
         settings.appearance = appearance
-        let model = AppViewModel(settings: settings, repository: PaperRepository(rootURL: root), isVerification: true)
+        if let data = try? Data(contentsOf: root.appendingPathComponent("verification-preferences.json")),
+           let preferences = try? JSONDecoder().decode(Preferences.self, from: data) {
+            settings.researchTopics = preferences.topics
+            settings.selectedTopicIDs = preferences.selected
+            settings.discoveryMode = preferences.mode
+        }
+        let model = AppViewModel(settings: settings, repository: PaperRepository(rootURL: root), isVerification: true,
+                                 allowPublicVerificationDiscovery: publicDiscovery)
         model.scope = .all
         let content = VStack(spacing: 0) {
-            Label("Verification library · offline · original library unchanged", systemImage: "testtube.2")
+            Label(publicDiscovery ? "Verification library · public arXiv only · original library unchanged" : "Verification library · offline · original library unchanged", systemImage: "testtube.2")
                 .font(.caption).frame(maxWidth: .infinity).padding(8)
                 .background(Color.orange.opacity(0.12))
             ContentView(model: model, settings: settings)
@@ -73,7 +80,22 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
         }
     }
 
-    func prepareToClose() -> Bool { model?.prepareToClose() ?? true }
+    func prepareToClose() -> Bool {
+        guard model?.prepareToClose() != false else { return false }
+        if let model, let settings {
+            let preferences = Preferences(topics: settings.researchTopics, selected: settings.selectedTopicIDs, mode: settings.discoveryMode)
+            if let data = try? JSONEncoder().encode(preferences) {
+                try? data.write(to: model.repository.rootURL.appendingPathComponent("verification-preferences.json"), options: .atomic)
+            }
+        }
+        return true
+    }
+
+    private struct Preferences: Codable {
+        var topics: [ResearchTopic]
+        var selected: Set<String>
+        var mode: DiscoveryMode
+    }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         guard model?.isCleaning != true else { return false }

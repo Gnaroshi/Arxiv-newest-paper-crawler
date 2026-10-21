@@ -17,9 +17,13 @@ The Python package continues to own its CLI collection path and the legacy repos
 
 `NoteDraftStore` owns transient per-paper edits separately from the browser's published state. Saves persist a copy before publishing it; failed writes leave drafts and saved reading state intact. The application termination delegate checks for unsaved work.
 
+`ReadingReviewModel` owns user preferences/decisions independently of `LibraryState`. `ReadingReviewService` computes and atomically saves a derived daily plan on a serial actor. The existing topic/text index is reused; ordered bucket IDs and counts are installed with each completed plan. A revision check rejects stale UI results. Local day-change/activation signals refresh the plan without polling, background collection, Gemini calls or a login job. Manual pins and tomorrow deferrals are protected from pruning/cleanup; private backup snapshots add an optional backward-compatible reading-review field.
+
 Topic edits build a revision-tagged index off-main. A newer revision invalidates older results. Bulk cleanup/restore prepares active and (only when needed) Trash indexes before installing a snapshot. Cleanup apply checks both topic rules and exact reviewed candidate IDs; it cannot silently apply a new preview. Individual restore shrinks the remaining undo batch.
 
 `VerificationWindowController` hosts the same `ContentView` and `AppViewModel` on an explicitly selected fixture below the app's verification cache. The fixture marker and path are validated, preferences use a temporary suite, and its model blocks credentials, discovery, translation, download and external paper actions. The application target does not generate fixture data. Fixture generation belongs only to `ArxivDiscoveryCoreChecks`; it never writes the canonical library. A geometry diagnostic writes view frames only into that fixture folder.
+
+The explicit **Open public discovery verification library** diagnostic permits only normal public arXiv metadata discovery into a validated marked fixture. Credentials, translation, PDF downloads and external paper actions remain blocked. Topic selection/rules can be saved within that fixture for relaunch checks; temporary preferences never replace the normal app's settings. Offline verification remains the default diagnostic.
 
 ## Native data
 
@@ -45,6 +49,7 @@ The native source of truth is:
 - Adjacent selected UTC days share ranges of at most 31 days. Requests return up to 200 raw entries per page. Completeness uses OpenSearch totals/raw entry counts, not the number surviving topic filters. Saved pages do not consume the next run's ten-request budget.
 - `BoundedHTTPClient` owns the live task, streaming byte cap, wall-clock timer and cancellation continuation. Discovery uses 12 seconds per request within a 45-second total network budget, with at least three seconds between starts. A 429 applies cooldown; 5xx/invalid feeds fail fast. Partial results are preserved and never become complete coverage.
 - Discovery JSON/parsing/checkpoint work, cleanup previews and legacy import run outside the main actor. Library mutations and discovery are mutually excluded. Notes, favorites and collections are not replaced by discovery.
+- Discovery reports distinguish new and already-existing unique IDs and persist the exact topic/category scope identity. Cancel/retry replays cached checkpoints and fetches only pending work. A changed scope blocks misleading retry; a same-scope cancelled report can resume after relaunch. Corrupt existing paper data fails closed before HTTP, rather than being treated as an empty library.
 - Translation sends only the selected public title and abstract to the Gemini API after the user presses Translate.
 - PDF download requests only the selected public PDF URL.
 - Native PDF transfers stream to a temporary file, with a 45-second / 100-MB cap. File ownership is indexed and collisions never replace a reading copy. Gemini model loading and translation have 15-second and 30-second limits respectively, without automatic retry.

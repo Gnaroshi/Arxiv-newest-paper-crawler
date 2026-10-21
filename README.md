@@ -11,6 +11,7 @@ The SwiftUI app is the primary interface. Python remains available for compatibi
 - Searchable, user-editable topic rules with required and excluded phrases
 - Recoverable cleanup of unrelated unread Inbox/New papers, with preview, backup, Trash, and undo
 - Inbox, New, Reviewed, Saved, collection, VLA, World Models, subject, and text filters
+- Daily local reading shortlist with reasons, a configurable limit/focus, and manual priority choices
 - Persistent collections, per-paper notes, translations, and discovery history
 - Explicit per-paper PDF download
 - Optional per-paper Korean translation with a Keychain-stored Gemini key, selectable compatible model, and app-local token totals
@@ -49,6 +50,8 @@ The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
 - `library.json`: Inbox/Reviewed/Saved state, collections, and notes
 - `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
 - `last-discovery.json`: terminal search outcome, timing, partial results and failure reason
+- `reading-review.json`: your reading-focus preferences and explicit priority decisions
+- `daily-reading.json`: the latest locally generated reading recommendations and reasons
 - `Cache/Discovery/`: response pages reused for six hours, capped at 128 files / 64 MB
 - `pdf-index.json`: paper-to-local-PDF ownership, avoiding same-title collisions
 - `translation-usage.json`: app-local Gemini request and token totals
@@ -66,7 +69,7 @@ In Calendar, choose **Research topics**, then **Find or create topics**. Search 
 
 Adjacent selected dates share one range query; nonadjacent dates never include unselected days. Results are paged and saved after every page, off the UI thread. The calendar shows elapsed time, completed dates, matching papers saved, and Cancel. A request has a 12-second wall-clock limit and the search has a 45-second network budget. arXiv requests are serial and spaced at least three seconds apart, following its [API guidance](https://info.arxiv.org/help/api/tou.html). Service errors and rate limits stop the batch instead of repeating the same failure for every date.
 
-Complete coverage and response pages are reused for six hours. **Retry unfinished dates** resumes partial pages; **Search options → Refresh selected dates (ignore saved results)** explicitly bypasses the cache. Partial dates remain marked as needing search. Large searches may require another run; a time/page limit is never reported as complete. `last-discovery.json` records the outcome without credentials.
+Complete coverage and response pages are reused for six hours. **Retry N unfinished dates** resumes the original date selection and partial pages, including after relaunch. Changing selected topic rules/categories disables that retry until the original scope is restored; use a new search for changed conditions. **Search options → Refresh selected dates (ignore saved results)** explicitly bypasses the cache. Partial dates remain marked as needing search. Large searches may require another run; a time/page limit is never reported as complete. Results distinguish new papers from existing IDs; `last-discovery.json` records the scope, exact matched IDs, timing and outcome without credentials.
 
 Open **Cleanup** to preview unrelated unread Inbox papers, then choose **Move N to Trash**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Removed metadata leaves the active array and remains in **Trash**. Restore one paper there, or choose **Undo last removal (N)** to restore the latest remaining batch; the confirmation shows its exact count. Older batches stay in Trash. Backups are written before changes. PDFs and notes are never deleted by cleanup. Changing topic rules invalidates the preview; only the reviewed candidate set can be applied.
 
@@ -86,6 +89,14 @@ For local maintenance while the app is closed:
 ```
 
 The maintenance command operates on the native app library, uses the built-in VLA/World Models rules, and defaults to a read-only preview. Use Cleanup in the app for your selected custom topic rules. The Python compatibility CLI continues to use its separately configured data directory.
+
+## Today's reading
+
+The app opens on **Today's reading**, with five suggested papers by default. **Show** separates **Read first**, **Skim**, **Not now**, and **Needs context**. Recommendations use your selected research topics, optional focus phrases, saved papers and reading notes. They are transparent relevance heuristics, not a claim about scientific quality or citation impact. Missing title/abstract evidence goes to Needs context rather than an automatic rejection.
+
+Open **Reading focus** beside the heading to change the daily limit or add phrases, such as `inverse dynamics`. A paper's detail and context menu offer **Read first**, **Reconsider tomorrow**, **Not now**, and **Automatic**. Manual pins are additional to the automatic daily limit. Tomorrow deferrals expire at the next local midnight; Not now stays until you change it. Reviewed papers leave the queue unless you explicitly pin them for rereading.
+
+Priorities update locally when the date changes while the app is open, when it is activated/reopened, and after relevant library/topic changes. A closed app is not woken by a scheduled job. This feature never automatically collects papers, calls Gemini, downloads PDFs, marks papers reviewed, or moves/deletes anything. All papers remain accessible from All papers. Manual reading pins are protected from topic cleanup and retention pruning; reading decisions are included in private backups.
 
 ## Optional Gemini translation
 

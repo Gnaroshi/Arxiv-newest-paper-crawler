@@ -8,6 +8,7 @@ The main window answers five questions without opening another screen: what the 
 
 - Sidebar: Calendar, Inbox, New, Saved, Reviewed, All, Cleanup, Trash, collections, editable research topics, and observed subject filters.
 - Candidate column: status, bounded time-window control, search, and paper rows.
+- Today's reading is the initial view: a bounded suggested shortlist, plain-language evidence, and separate Skim / Not now / Needs context filters. Manual priority changes are reversible and never imply moving or deleting papers.
 - Detail column: one selected paper with metadata, abstract, and explicit actions.
 - Settings: Gemini key and model information separated from data-folder commands.
 - Calendar has an explicit collection scope: research topics (default VLA + World Models) or broad arXiv subject tags. Topic browsing in the sidebar and the remote collection scope are distinct controls.
@@ -18,6 +19,7 @@ The main window answers five questions without opening another screen: what the 
 
 The minimum window is 900×620. Text wraps before controls compress. The candidate and detail columns remain independently scrollable.
 Calendar and Cleanup use the full workspace instead of an empty detail placeholder. Calendar search actions stay pinned below the scrollable dates; date-by-date progress, cancellation and errors appear beside those actions.
+Both panes own an explicit viewport-sized layout with a scrolling body and ordinary pinned footer. Do not restore the vertically fixed `safeAreaInset` footer: adding progress/results to it reproduced a minimum-window overflow. Calendar body scrolling must not move the sidebar, toolbar or cancellation footer outside the window.
 The root workspace is constrained to the actual viewport. Cleanup owns a bounded scrolling body and a separate fixed footer; neither its empty state nor long candidate content can push controls beyond the window. Persisted list widths are clamped to leave at least 300 points for details. Below a 601-point workspace, list and detail become separate views. Explicit scope changes reset list position, not note drafts.
 
 Note edit state belongs to a small per-paper draft store observed only by the editor. Typing must not rebuild the browser index or sidebar counts. Saved/Unsaved and save failures appear beside the note, not as a banner that displaces the paper list. Closing with a draft requires an explicit save/discard/cancel choice.
@@ -26,6 +28,8 @@ Note edit state belongs to a small per-paper draft store observed only by the ed
 
 Topic evidence and normalized searchable text are indexed when papers or rules change, not during SwiftUI row rendering. Search is debounced by 150 ms. Sidebar counts are cached. Trash is loaded on demand, and archive writes run off the UI thread with one mutation at a time. Cleanup archives metadata and a pre-change backup before compacting the live array; tombstones prevent deleted papers from silently reappearing during discovery.
 Clearing search restores the current scope immediately. Topic-rule indexing runs off-main and only the latest rule revision can install results. Re-selecting a viewed paper does not rewrite reading state. PDF availability is cached instead of reading the ownership file during view rendering. Cleanup feedback and discovery feedback are independent. Cleanup invalidates stale previews and compares the candidate IDs again before any backup/write.
+Daily priority calculation runs on its own actor, reusing the topic/text index. Bucket counts and ordered IDs are prepared once per plan, not while rendering rows or selecting papers. Priority-filter changes reset list scrolling and reconcile out-of-scope details; note drafts remain independently owned. Only meaningful reading changes rerank the queue, not each viewed selection or typed note character.
+Topic editing focuses the name, saves on the default action, and prevents Done from discarding an open editor. A changed topic selection/rule invalidates discovery coverage and hides the previous run's Retry action until the original scope is restored.
 
 ## Shared application language
 

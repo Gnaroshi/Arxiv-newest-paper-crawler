@@ -36,6 +36,10 @@ public struct DiscoveryRunReport: Codable, Sendable {
     public var failures: [DiscoveryFailure] = []
     public var requestCount = 0
     public var receivedPapers = 0
+    public var addedPapers: Int?
+    public var existingPapers: Int?
+    public var matchedPaperIDs: [String]?
+    public var scopeSignature: String?
     public var cancelled = false
     public var timedOut = false
     public var retryAfterSeconds: TimeInterval?
@@ -93,7 +97,18 @@ public actor DiscoverySearch {
         let start = Date()
         let deadline = start.addingTimeInterval(policy.totalTimeout)
         var history = try repository.loadDiscoveryHistory()
+        let initialIDs: Set<String>
+        do { initialIDs = Set(try repository.loadPapers().map(\.shortID)) }
+        catch {
+            report.storageFailed = true
+            report.pendingDays = report.selectedDays
+            report.failures = [.init(days: report.selectedDays, reason: "storage", message: "Existing papers could not be read. Nothing was replaced; check local storage before retrying.")]
+            report.elapsedSeconds = Date().timeIntervalSince(start)
+            persistReport(&report)
+            return report
+        }
         let rules = template.researchTopics ?? ResearchTopic.defaults.filter { template.topics.map(\.rawValue).contains($0.id) }
+        report.scopeSignature = DiscoveryScopeIdentity.signature(mode: template.mode, categories: Set(template.categories), topics: rules)
         report.cachedDays = forceRefresh ? [] : report.selectedDays.filter { day in
             guard let record = history.days[day] else { return false }
             return record.covers(mode: template.mode, categories: Set(template.categories), researchTopics: rules)
@@ -104,6 +119,7 @@ public actor DiscoverySearch {
         var consecutiveFailures = 0
         var stop = false
         var received = Set<String>()
+        var saved = Set<String>()
         await progress(.init(message: pending.isEmpty ? "Using saved results." : "Preparing grouped date search…", completedDays: completed.count, totalDays: report.selectedDays.count, receivedPapers: 0, requests: 0))
 
         if let cooldownUntil, cooldownUntil > Date(), !pending.isEmpty {
@@ -159,16 +175,19 @@ public actor DiscoverySearch {
                         groupPapers[paper.shortID] = paper
                         received.insert(paper.shortID)
                     }
+                    let countsByDay = Dictionary(grouping: groupPapers.values, by: { DiscoveryDate.key(for: $0.publishedAt) }).mapValues(\.count)
                     let records = group.map { day in
-                        DiscoveryDayRecord(day: day, lastSearchedAt: oldestFetch, paperCount: groupPapers.values.filter { DiscoveryDate.key(for: $0.publishedAt) == day }.count, categories: template.categories, isComplete: batch.isComplete, mode: template.mode, topics: template.topics, researchTopics: rules)
+                        DiscoveryDayRecord(day: day, lastSearchedAt: oldestFetch, paperCount: countsByDay[day, default: 0], categories: template.categories, isComplete: batch.isComplete, mode: template.mode, topics: template.topics, researchTopics: rules)
                     }
                     // Metadata first, coverage second: never claim a successful
                     // search for papers that have not reached disk yet.
                     do {
                         let current = try repository.loadPapers()
                         let merged = repository.merge(existing: current, discovered: Array(groupPapers.values)).filter { excluded[$0.shortID] == nil }
-                        let kept = repository.prunedPapers(merged, library: try repository.loadLibraryState(), retentionDays: policy.retentionDays)
+                        let kept = repository.prunedPapers(merged, library: try repository.loadLibraryState(), retentionDays: policy.retentionDays,
+                                                           excludedIDs: try repository.loadReadingReview().protectedIDs.union(received))
                         try repository.savePapers(kept)
+                        saved.formUnion(groupPapers.keys)
                         for record in records where batch.isComplete || !completed.contains(record.day) { history.record(record) }
                         history.prune()
                         try repository.saveDiscoveryHistory(history)
@@ -201,9 +220,17 @@ public actor DiscoverySearch {
         }
         report.completedDays = completed.sorted()
         report.pendingDays = report.selectedDays.filter { !completed.contains($0) }
-        report.receivedPapers = received.count
+        report.receivedPapers = saved.count
+        report.matchedPaperIDs = saved.sorted()
+        report.addedPapers = saved.subtracting(initialIDs).count
+        report.existingPapers = saved.intersection(initialIDs).count
         report.cancelled = report.cancelled || Task.isCancelled
         report.elapsedSeconds = Date().timeIntervalSince(start)
+        persistReport(&report)
+        return report
+    }
+
+    private func persistReport(_ report: inout DiscoveryRunReport) {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -213,7 +240,6 @@ public actor DiscoverySearch {
             report.storageFailed = true
             report.failures.append(.init(days: [], reason: "storage", message: "Papers were checkpointed, but the search report could not be saved."))
         }
-        return report
     }
 
     private static func failure(_ error: Error, days: [String]) -> DiscoveryFailure {
@@ -266,5 +292,20 @@ public actor DiscoverySearch {
             bytes += (try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             if index >= 128 || bytes > 64 * 1024 * 1024 { try? FileManager.default.removeItem(at: file) }
         }
+    }
+}
+
+public enum DiscoveryScopeIdentity {
+    public static func signature(mode: DiscoveryMode, categories: Set<String>, topics: [ResearchTopic]) -> String {
+        mode.rawValue + "|" + (mode == .topics ? topics.map(\.signature).sorted().joined(separator: "||") : categories.sorted().joined(separator: "|"))
+    }
+}
+
+extension PaperRepository {
+    public func loadLastDiscoveryReport() throws -> DiscoveryRunReport? {
+        let url = rootURL.appendingPathComponent("last-discovery.json")
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        let decoder = JSONDecoder(); decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(DiscoveryRunReport.self, from: Data(contentsOf: url))
     }
 }

@@ -260,7 +260,8 @@ public struct PaperRepository: Sendable {
             discoveryHistory: loadDiscoveryHistory(),
             translationUsage: loadTranslationUsage(),
             cleanupState: loadCleanupState(),
-            trashedPapers: loadTrashPapers()
+            trashedPapers: loadTrashPapers(),
+            readingReview: loadReadingReview()
         )
     }
 

@@ -184,4 +184,32 @@ import XCTest
         XCTAssertFalse(PaperWorkspaceMetrics(width: 600).sideBySide)
         XCTAssertFalse(VerificationLibrary.isValid(PaperRepository.defaultRootURL()))
     }
+
+    func testDailyPriorityAndFilterChangesClearOutOfScopeDetailWithoutDeletingPaper() async throws {
+        let (model, root, suite) = try fixture()
+        defer { cleanup(root, suite) }
+        model.scope = .today
+        let deadline = Date().addingTimeInterval(3)
+        while model.reading.plan == nil {
+            guard Date() < deadline else { return XCTFail("Reading plan not prepared") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(30))
+        let id = try XCTUnwrap(model.filteredPapers.first?.shortID)
+        model.selectedPaperID = id
+        model.reading.choose(.notNow, for: id)
+        while model.reading.isUpdating {
+            guard Date() < deadline else { return XCTFail("Priority change not reflected") }
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertNil(model.selectedPaperID)
+        XCTAssertFalse(model.filteredPapers.contains { $0.shortID == id })
+        XCTAssertEqual(model.papers.count, 80)
+        model.reading.bucket = .notNow
+        try await Task.sleep(for: .milliseconds(30))
+        XCTAssertTrue(model.filteredPapers.contains { $0.shortID == id })
+        XCTAssertEqual(model.reading.notice, nil)
+        XCTAssertEqual(try model.repository.loadPapers().count, 80)
+    }
 }

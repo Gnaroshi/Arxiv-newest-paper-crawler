@@ -10,60 +10,66 @@ struct DiscoveryCalendarView: View {
     private let columns = Array(repeating: GridItem(.flexible(minimum: 0), spacing: 6), count: 7)
 
     var body: some View {
-          ScrollView {
-          VStack(alignment: .leading, spacing: 16) {
-            DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
-            Divider()
-            ViewThatFits(in: .horizontal) {
-              HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Discovery calendar")
-                        .font(.title2.weight(.bold))
-                    Text("Select dates to search · arXiv dates use UTC")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                monthControls
-              }
-              VStack(alignment: .leading, spacing: 12) {
-                Text("Discovery calendar").font(.title2.bold())
-                Text("Select dates to search · UTC").font(.caption).foregroundStyle(.secondary)
-                monthControls
-              }
-            }
+        GeometryReader { viewport in
+            VStack(spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        DiscoveryScopeControls(settings: settings).disabled(model.isDiscovering)
+                        Divider()
+                        ViewThatFits(in: .horizontal) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text("Discovery calendar")
+                                        .font(.title2.weight(.bold))
+                                    Text("Select dates to search · arXiv dates use UTC")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                monthControls
+                            }
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("Discovery calendar").font(.title2.bold())
+                                Text("Select dates to search · UTC").font(.caption).foregroundStyle(.secondary)
+                                monthControls
+                            }
+                        }
 
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(Array(DiscoveryDate.calendar.veryShortWeekdaySymbols.enumerated()), id: \.offset) { _, weekday in
-                    Text(weekday)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                }
+                        LazyVGrid(columns: columns, spacing: 8) {
+                            ForEach(Array(DiscoveryDate.calendar.veryShortWeekdaySymbols.enumerated()), id: \.offset) {
+                                _, weekday in
+                                Text(weekday)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity)
+                            }
 
-                ForEach(Array(monthSlots.enumerated()), id: \.offset) { _, date in
-                    if let date {
-                        dayCell(date)
-                    } else {
-                        Color.clear.frame(height: 72)
-                    }
+                            ForEach(Array(monthSlots.enumerated()), id: \.offset) { _, date in
+                                if let date {
+                                    dayCell(date)
+                                } else {
+                                    Color.clear.frame(height: 72)
+                                }
+                            }
+                        }
+                        HStack(spacing: 18) {
+                            legend(color: AppTheme.teal, text: "Searched")
+                            legend(color: AppTheme.orange, text: "Needs search")
+                            legend(color: .secondary, text: "Not searched")
+                        }.font(.caption)
+                    }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(
+                        maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(minHeight: 0, maxHeight: .infinity)
+                VStack(spacing: 0) {
+                    Divider()
+                    discoveryFooter.padding(16)
+                }
+                .background(AppTheme.canvas(for: colorScheme))
             }
-            HStack(spacing: 18) {
-                legend(color: AppTheme.teal, text: "Searched")
-                legend(color: AppTheme.orange, text: "Needs search")
-                legend(color: .secondary, text: "Not searched")
-            }.font(.caption)
-          }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
-          }
-          .safeAreaInset(edge: .bottom, spacing: 0) {
-              VStack(spacing: 0) {
-                  Divider()
-                  discoveryFooter.padding(16)
-              }
-              .fixedSize(horizontal: false, vertical: true)
-              .background(AppTheme.canvas(for: colorScheme))
-          }
+            .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
+            .clipped()
+        }
         .background(AppTheme.canvas(for: colorScheme))
     }
 
@@ -75,46 +81,67 @@ struct DiscoveryCalendarView: View {
             }
             if let progress = model.discoveryProgress { Text(progress).font(.caption).foregroundStyle(.secondary) }
             if model.isDiscovering, let started = model.discoveryStartedAt {
-                ProgressView(value: Double(model.discoveryCompletedDays), total: Double(max(1, model.discoveryTotalDays)))
+                ProgressView(
+                    value: Double(model.discoveryCompletedDays), total: Double(max(1, model.discoveryTotalDays)))
                 TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Text("\(Int(context.date.timeIntervalSince(started)))s elapsed · \(model.discoveryCompletedDays)/\(model.discoveryTotalDays) dates complete · \(model.discoveryReceivedPapers) matching papers saved · 45s search limit")
-                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                    Text(
+                        "\(Int(context.date.timeIntervalSince(started)))s elapsed · \(model.discoveryCompletedDays)/\(model.discoveryTotalDays) dates complete · \(model.discoveryReceivedPapers) matching papers saved · 45s search limit"
+                    )
+                    .font(.caption).monospacedDigit().foregroundStyle(.secondary)
                 }
             }
             VStack(alignment: .leading, spacing: 12) {
-              HStack {
-                Button("Select unsearched") { selectUnsearchedMonth() }
-                    .disabled(unsearchedMonthKeys.isEmpty || model.isDiscovering)
-                Button("Clear") { model.selectedDiscoveryDays.removeAll() }
-                    .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering)
-                Spacer()
-                Text("\(model.selectedDiscoveryDays.count) selected")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-              }
+                HStack {
+                    Button("Select unsearched") { selectUnsearchedMonth() }
+                        .disabled(unsearchedMonthKeys.isEmpty || model.isDiscovering)
+                    Button("Clear") { model.selectedDiscoveryDays.removeAll() }
+                        .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering)
+                    Spacer()
+                    Text("\(model.selectedDiscoveryDays.count) selected")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Button {
                     model.searchSelectedDates()
                 } label: {
                     if model.isDiscovering {
                         Label("Searching…", systemImage: "hourglass")
                     } else {
-                        Label(settings.discoveryMode == .topics ? "Find topic papers" : "Search full categories", systemImage: "magnifyingglass")
+                        Label(
+                            settings.discoveryMode == .topics ? "Find topic papers" : "Search full categories",
+                            systemImage: "magnifyingglass")
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-                .disabled(model.isVerification || model.selectedDiscoveryDays.isEmpty || !model.canChangeLibrary || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
-                if model.isDiscovering { Button("Cancel search") { model.cancelDiscovery() } }
-                else {
+                .disabled(
+                    !model.canDiscover || model.selectedDiscoveryDays.isEmpty || !model.canChangeLibrary
+                        || (settings.discoveryMode == .topics
+                            ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty)
+                )
+                if model.isDiscovering {
+                    Button("Cancel search") { model.cancelDiscovery() }
+                } else {
                     HStack {
                         if model.discoveryReport?.pendingDays.isEmpty == false {
-                            Button("Retry unfinished dates") { model.retryUnfinishedDates() }
+                            if model.canRetryDiscovery {
+                                Button(
+                                    "Retry \(model.discoveryReport?.pendingDays.count ?? 0) unfinished \(model.discoveryReport?.pendingDays.count == 1 ? "date" : "dates")"
+                                ) { model.retryUnfinishedDates() }
+                                .help(model.discoveryReport?.pendingDays.joined(separator: ", ") ?? "")
+                            } else {
+                                Text("Topics changed. Start a new search.").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                         Menu {
-                            Button("Refresh selected dates (ignore saved results)") { model.searchSelectedDates(forceRefresh: true) }
-                        } label: { Label("Search options", systemImage: "ellipsis.circle") }
-                            .menuStyle(.borderlessButton).fixedSize()
+                            Button("Refresh selected dates (ignore saved results)") {
+                                model.searchSelectedDates(forceRefresh: true)
+                            }
+                        } label: {
+                            Label("Search options", systemImage: "ellipsis.circle")
+                        }
+                        .menuStyle(.borderlessButton).fixedSize()
                     }
                 }
             }
@@ -124,8 +151,14 @@ struct DiscoveryCalendarView: View {
     private func dayCell(_ date: Date) -> some View {
         let key = DiscoveryDate.key(for: date)
         let record = model.discoveryHistory.days[key]
-        let covers = record?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true
-        let matchesScope = record?.matchesScope(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true
+        let covers =
+            record?.covers(
+                mode: settings.discoveryMode, categories: settings.enabledCategories,
+                researchTopics: settings.selectedTopics) == true
+        let matchesScope =
+            record?.matchesScope(
+                mode: settings.discoveryMode, categories: settings.enabledCategories,
+                researchTopics: settings.selectedTopics) == true
         let isSelected = model.selectedDiscoveryDays.contains(key)
         let isFuture = date > Date()
         let count = record.map { record in
@@ -133,8 +166,7 @@ struct DiscoveryCalendarView: View {
         }
 
         return Button {
-            if isSelected { model.selectedDiscoveryDays.remove(key) }
-            else { model.selectedDiscoveryDays.insert(key) }
+            if isSelected { model.selectedDiscoveryDays.remove(key) } else { model.selectedDiscoveryDays.insert(key) }
         } label: {
             VStack(alignment: .leading, spacing: 5) {
                 HStack {
@@ -156,15 +188,20 @@ struct DiscoveryCalendarView: View {
                         .lineLimit(1)
                 } else if record != nil {
                     Image(systemName: "arrow.clockwise").font(.caption2).foregroundStyle(AppTheme.orange)
-                        .help(matchesScope ? "Partial results; search again to continue" : "Search again after changing topics")
+                        .help(
+                            matchesScope
+                                ? "Partial results; search again to continue" : "Search again after changing topics")
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)
             .padding(8)
-            .background(isSelected ? AppTheme.sky.opacity(colorScheme == .dark ? 0.24 : 0.18) : AppTheme.panel(for: colorScheme))
+            .background(
+                isSelected ? AppTheme.sky.opacity(colorScheme == .dark ? 0.24 : 0.18) : AppTheme.panel(for: colorScheme)
+            )
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
-                    .stroke(isSelected ? AppTheme.sky : AppTheme.border(for: colorScheme), lineWidth: isSelected ? 2 : 1)
+                    .stroke(
+                        isSelected ? AppTheme.sky : AppTheme.border(for: colorScheme), lineWidth: isSelected ? 2 : 1)
             }
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
@@ -178,7 +215,7 @@ struct DiscoveryCalendarView: View {
         let calendar = DiscoveryDate.calendar
         let range = calendar.range(of: .day, in: .month, for: visibleMonth) ?? 1..<1
         let weekday = calendar.component(.weekday, from: visibleMonth)
-        let leading = Array<Date?>(repeating: nil, count: max(weekday - 1, 0))
+        let leading = [Date?](repeating: nil, count: max(weekday - 1, 0))
         let days = range.compactMap { day -> Date? in
             calendar.date(bySetting: .day, value: day, of: visibleMonth)
         }.map(Optional.some)
@@ -191,11 +228,19 @@ struct DiscoveryCalendarView: View {
 
     private var monthControls: some View {
         HStack {
-            Button { moveMonth(-1) } label: { Image(systemName: "chevron.left") }
-                .help("Previous month").accessibilityLabel("Previous month")
+            Button {
+                moveMonth(-1)
+            } label: {
+                Image(systemName: "chevron.left")
+            }
+            .help("Previous month").accessibilityLabel("Previous month")
             Text(monthTitle).font(.headline).frame(minWidth: 135)
-            Button { moveMonth(1) } label: { Image(systemName: "chevron.right") }
-                .help("Next month").accessibilityLabel("Next month").disabled(!canMoveForward)
+            Button {
+                moveMonth(1)
+            } label: {
+                Image(systemName: "chevron.right")
+            }
+            .help("Next month").accessibilityLabel("Next month").disabled(!canMoveForward)
         }
     }
 
@@ -204,11 +249,14 @@ struct DiscoveryCalendarView: View {
     }
 
     private var unsearchedMonthKeys: Set<String> {
-        Set(monthSlots.compactMap { date in
-            guard let date, date <= Date() else { return nil }
-            let key = DiscoveryDate.key(for: date)
-            return model.discoveryHistory.days[key]?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true ? nil : key
-        })
+        Set(
+            monthSlots.compactMap { date in
+                guard let date, date <= Date() else { return nil }
+                let key = DiscoveryDate.key(for: date)
+                return model.discoveryHistory.days[key]?.covers(
+                    mode: settings.discoveryMode, categories: settings.enabledCategories,
+                    researchTopics: settings.selectedTopics) == true ? nil : key
+            })
     }
 
     private func selectUnsearchedMonth() {

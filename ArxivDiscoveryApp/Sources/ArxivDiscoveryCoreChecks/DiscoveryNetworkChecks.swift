@@ -192,6 +192,37 @@ func checkDiscoveryNetworking() async throws {
     try require(try partialRepository.loadPapers().count == 3, "Paged continuation must merge without duplicates.")
     try require(try partialRepository.loadLibraryState().progress(for: "2610.00001").note == "My reading work", "Search must never overwrite reading state.")
 
+    let cancelRepository = PaperRepository(rootURL: root.appendingPathComponent("cancel-resume"))
+    let cancelSearch = DiscoverySearch(repository: cancelRepository, client: fixtureClient())
+    var cancelPolicy = pagedPolicy
+    cancelPolicy.requestTimeout = 5
+    cancelPolicy.totalTimeout = 10
+    FixtureProtocol.configure { request, instance in
+        let offset = URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "start" }?.value
+        if offset == "0" { instance.respond(feed([("2610.01001", days[0]), ("2610.01002", days[1])], total: 4)) }
+        // The next request deliberately waits until cancellation.
+    }
+    let cancelRun = Task {
+        try await cancelSearch.search(days: [days[0], days[1]], template: query(), policy: cancelPolicy) { _ in }
+    }
+    let cancelDeadline = Date().addingTimeInterval(2)
+    while FixtureProtocol.count < 2, Date() < cancelDeadline { try await Task.sleep(for: .milliseconds(10)) }
+    try require(FixtureProtocol.count == 2, "Cancellation test must reach the second page after checkpointing the first.")
+    cancelRun.cancel()
+    let checkpointCancelled = try await cancelRun.value
+    try require(checkpointCancelled.cancelled && checkpointCancelled.pendingDays.count == 2 && checkpointCancelled.receivedPapers == 2, "Cancellation must preserve checkpointed results without claiming complete date coverage.")
+    try require(try cancelRepository.loadPapers().count == 2, "First-page papers must be on disk after cancellation.")
+    FixtureProtocol.configure { _, instance in instance.respond(feed([("2610.01003", days[0]), ("2610.01004", days[1])], total: 4)) }
+    let cancelRetry = try await cancelSearch.search(days: [days[0], days[1]], template: query(), policy: cancelPolicy) { _ in }
+    let expectedIDs: Set<String> = ["2610.01001", "2610.01002", "2610.01003", "2610.01004"]
+    try require(FixtureProtocol.offsets == [2], "Cancellation retry must resume only the unfinished page.")
+    try require(cancelRetry.pendingDays.isEmpty && Set(cancelRetry.matchedPaperIDs ?? []) == expectedIDs, "Retry must account for every expected unique paper, with no omission.")
+    try require(cancelRetry.addedPapers == 2 && cancelRetry.existingPapers == 2, "Retry must distinguish newly added papers from replayed existing ones.")
+    let storedAfterRetry = try cancelRepository.loadPapers()
+    try require(storedAfterRetry.count == 4 && Set(storedAfterRetry.map(\.shortID)) == expectedIDs, "Retry must not duplicate checkpointed papers.")
+    let repeatRetry = try await cancelSearch.search(days: [days[0], days[1]], template: query(), policy: cancelPolicy) { _ in }
+    try require(repeatRetry.requestCount == 0 && (try cancelRepository.loadPapers()).count == 4, "Repeating a successful retry must be idempotent.")
+
     let budgeted = DiscoverySearch(repository: PaperRepository(rootURL: root.appendingPathComponent("page-budget")), client: fixtureClient())
     var onePagePolicy = pagedPolicy
     onePagePolicy.maximumPages = 1

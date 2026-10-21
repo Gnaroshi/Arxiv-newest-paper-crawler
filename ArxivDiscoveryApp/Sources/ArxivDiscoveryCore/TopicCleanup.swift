@@ -126,6 +126,7 @@ public extension PaperRepository {
         var preview = TopicCleanupPreview(topics: topics, totalCount: papers.count, relatedCount: 0, protectedCount: 0, alreadyExcludedCount: 0, candidates: [])
         preview.researchTopics = rules
         let localPDFs = try existingPDFURLs(for: papers, preferredStyle: .title)
+        let readingPins = try loadReadingReview().protectedIDs
         for paper in papers {
             if state.excluded[paper.shortID] != nil {
                 preview.alreadyExcludedCount += 1
@@ -134,6 +135,7 @@ public extension PaperRepository {
             } else {
                 let progress = library.progress(for: paper.shortID)
                 let userWork = progress.disposition != .inbox
+                    || readingPins.contains(paper.shortID)
                     || progress.savedAt != nil || progress.reviewedAt != nil
                     || progress.firstViewedAt != nil
                     || !progress.collectionIDs.isEmpty
@@ -206,7 +208,7 @@ public extension PaperRepository {
     private func writeCleanupBackup(batchID: String) throws -> URL {
         let url = rootURL.appendingPathComponent("Backups", isDirectory: true).appendingPathComponent("cleanup-" + batchID, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
-        for source in [papersURL, libraryURL, favoritesURL, discoveryHistoryURL, translationUsageURL, cleanupStateURL, trashURL, statusURL] {
+        for source in [papersURL, libraryURL, favoritesURL, discoveryHistoryURL, translationUsageURL, cleanupStateURL, trashURL, statusURL, readingReviewURL, dailyReadingURL] {
             if FileManager.default.fileExists(atPath: source.path) {
                 try FileManager.default.copyItem(at: source, to: url.appendingPathComponent(source.lastPathComponent))
             }

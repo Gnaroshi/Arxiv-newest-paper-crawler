@@ -78,3 +78,38 @@ packaging, signature verification and installation were local.
 Application tests use `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`.
 The standalone Command Line Tools attempt failed because its SDK lacked the
 SwiftUI macro plugin; the full-Xcode rerun passed all eleven tests.
+
+## Topic editing, cancellation and daily reading: 2026-10-22
+
+Validation used the signed installed app and the same product views/model on an
+explicitly marked 7,003-record verification library. Public arXiv metadata access
+was deliberately enabled only for this fixture; the user's normal library was not
+used as a test collection. No Gemini requests or PDF downloads were made.
+
+| Check | Evidence and correction |
+|---|---|
+| Create/edit topic | Entered Robot dynamics with any/required/excluded phrases, saved with Return, then renamed it to Robot world models and expanded its phrases. Name focus, explicit save, duplicate-name validation and editor dismissal safety were improved |
+| Multi-date search | Selected UTC October 10, 12, 14, 16 and 18, 2026 with only the custom topic enabled. Unselected dates were not included |
+| Cancel after checkpoints | Real run cancelled after four complete dates and nine matching IDs; one date remained pending. Saved rows were retained |
+| Pending UI layout | Reproduced the old calendar's whole-pane overflow when progress grew. Replaced the vertically fixed inset footer with a viewport-bounded scrolling body and pinned footer; the cancel control remained visible at 900-point width during progress and after cancellation |
+| Restart and resume | Quit normally with a cancelled search, reopened the same isolated library, recovered the exact custom rule/date selection, and resumed the remaining date with one request in about 2.1 seconds |
+| Changed scope | Enabling World Models after cancellation removed the old Retry action and showed the changed-topic message; restoring the original selection re-enabled it |
+| Independent full comparison | Forced a complete uncached run over the same five dates: five requests, about 14.3 seconds, nine unique matching IDs. Union of cancelled plus resumed IDs equalled all nine uninterrupted IDs; missing IDs, unexpected IDs, storage duplicates and missing stored rows were all zero. Active record count stayed 7,003 |
+| Reading choices | Set the protected note fixture to Not now, found it in that filter, and pinned it back to Read first. Its saved note remained intact. Set the automatic limit to two and added inverse dynamics; the resulting list contained two suggestions plus the explicit manual pin |
+| Reading layout/state | Reviewed minimum dark and standard light windows. Repaired out-of-scope detail selection and added a regression check; bucket switches reset list scrolling. Priority feedback stays in the reading header |
+
+New local tests cover cancel/checkpoint/retry exact ID sets, scope revisions,
+relaunch recovery, reading-work preservation, manual choices, local-midnight
+expiry, missing evidence, reviewed-item exclusion, shortlist bounds, private
+backup inclusion, cleanup protection, and out-of-scope detail reconciliation.
+The application suite has 26 tests, including a guard against starting discovery
+from a keyboard command while topic editors are open. A 7,000-record priority calculation took about
+123 ms in one debug run, excluding the initial text/topic index; it runs off-main.
+This is model timing, not a rendering FPS claim. Topic-switch model pairs were
+about 42 ms in that run. Python and existing network/core checks remain local.
+
+Daily reading is a local relevance shortlist, not an automatic quality assessment
+or an unattended collection task. It refreshes on local date change/activation;
+closed-app scheduling, scientific merit ranking and automatic deletion are not
+implemented or implied. The UI and model never mark a recommendation read merely
+because it was ranked. Reading decisions are stored separately from notes/state.
