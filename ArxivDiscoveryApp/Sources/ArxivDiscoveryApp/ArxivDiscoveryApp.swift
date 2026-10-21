@@ -68,6 +68,7 @@ struct ArxivDiscoveryApplication: App {
                     Button("Verification window: minimum size") { verification.resize(width: 900, height: 620) }
                     Button("Verification window: standard size") { verification.resize(width: 1180, height: 760) }
                     Button("Verification window: toggle appearance") { verification.toggleAppearance() }
+                    Button("Verification window: export geometry") { verification.exportGeometry() }
                 }
             }
         }

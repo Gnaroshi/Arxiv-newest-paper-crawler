@@ -9,6 +9,7 @@ struct CleanupView: View {
     @State private var restoring = false
 
     var body: some View {
+      VStack(spacing: 0) {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
                 header.padding(20)
@@ -36,7 +37,7 @@ struct CleanupView: View {
                 }
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .frame(minHeight: 0, maxHeight: .infinity)
             VStack(alignment: .leading, spacing: 12) {
                 Divider()
                 VStack(alignment: .leading, spacing: 12) {
@@ -55,7 +56,7 @@ struct CleanupView: View {
             }
             .fixedSize(horizontal: false, vertical: true)
             .background(AppTheme.canvas(for: colorScheme))
-        }
+      }
         .background(AppTheme.canvas(for: colorScheme))
         .onAppear { model.previewCleanup() }
         .onChange(of: settings.selectedTopicIDs) { model.previewCleanup() }

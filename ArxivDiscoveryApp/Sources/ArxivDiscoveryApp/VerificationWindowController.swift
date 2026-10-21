@@ -58,6 +58,17 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
         settings.appearance = settings.appearance == .light ? .dark : .light
     }
 
+    func exportGeometry() {
+        guard let window, let model, let view = window.contentView else { return }
+        let values = ["window": NSStringFromRect(window.frame), "content": NSStringFromRect(view.frame),
+                      "bounds": NSStringFromRect(view.bounds), "layout": NSStringFromRect(window.contentLayoutRect),
+                      "minimum": NSStringFromSize(window.contentMinSize),
+                      "visible": NSStringFromRect(window.screen?.visibleFrame ?? .zero)]
+        if let data = try? JSONEncoder().encode(values) {
+            try? data.write(to: model.repository.rootURL.appendingPathComponent("viewport-debug.json"), options: .atomic)
+        }
+    }
+
     func prepareToClose() -> Bool { model?.prepareToClose() ?? true }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
