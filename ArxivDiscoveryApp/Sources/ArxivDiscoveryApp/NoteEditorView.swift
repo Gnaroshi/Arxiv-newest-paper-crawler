@@ -4,6 +4,7 @@ import SwiftUI
 @MainActor
 final class NoteDraftStore: ObservableObject {
     @Published var values = NoteDrafts()
+    @Published var errors: [String: String] = [:]
 }
 
 struct NoteEditorView: View {
@@ -22,7 +23,7 @@ struct NoteEditorView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Note").font(.headline)
-                if changed { Text("Unsaved").font(.caption).foregroundStyle(.secondary) }
+                Text(changed ? "Unsaved" : (saved.isEmpty ? "" : "Saved")).font(.caption).foregroundStyle(.secondary)
                 Spacer(minLength: 8)
                 if changed {
                     Button("Revert") { drafts.values.discard(paperID) }
@@ -43,6 +44,9 @@ struct NoteEditorView: View {
             .overlay { RoundedRectangle(cornerRadius: 6).stroke(AppTheme.border(for: colorScheme)) }
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .accessibilityLabel("Paper note")
+            if let error = drafts.errors[paperID] {
+                Text(error).font(.callout).foregroundStyle(.red).fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

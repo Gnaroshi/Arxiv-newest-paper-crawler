@@ -13,6 +13,7 @@ struct ContentView: View {
     @State private var deletingPaper: Paper?
 
     var body: some View {
+      GeometryReader { viewport in
         NavigationSplitView {
             sidebar
                 .navigationSplitViewColumnWidth(min: 190, ideal: 220, max: 270)
@@ -23,6 +24,8 @@ struct ContentView: View {
                 paperWorkspace
             }
         }
+        .frame(width: viewport.size.width, height: viewport.size.height)
+      }
         .navigationSplitViewStyle(.balanced)
         .background(AppTheme.canvas(for: colorScheme))
         .preferredColorScheme(settings.appearance.colorScheme)

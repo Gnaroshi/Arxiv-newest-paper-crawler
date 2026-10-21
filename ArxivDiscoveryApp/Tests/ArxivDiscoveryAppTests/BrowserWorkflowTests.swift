@@ -100,7 +100,7 @@ import XCTest
         model.saveNote("Keep this draft", for: paper)
         XCTAssertEqual(model.library.progress(for: paper.shortID).note, "")
         XCTAssertEqual(model.noteDrafts.values.text(for: paper.shortID, saved: ""), "Keep this draft")
-        XCTAssertNotNil(model.errorMessage)
+        XCTAssertNotNil(model.noteDrafts.errors[paper.shortID])
     }
 
     func testCoreCleanupRejectsChangedCandidatesBeforeAnyWrite() throws {

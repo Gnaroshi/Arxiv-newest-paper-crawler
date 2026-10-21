@@ -520,9 +520,9 @@ final class AppViewModel: ObservableObject {
             try repository.saveLibraryState(updated)
             library = updated
             noteDrafts.values.discard(paper.shortID)
-            notice = "Note saved."
+            noteDrafts.errors.removeValue(forKey: paper.shortID)
             try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
-        } catch { errorMessage = "The note could not be saved. Your draft is kept. \(error.localizedDescription)" }
+        } catch { noteDrafts.errors[paper.shortID] = "The note could not be saved. Your draft is kept. Check local disk access, then try again." }
     }
 
     private func refreshLastRemovalCount() {

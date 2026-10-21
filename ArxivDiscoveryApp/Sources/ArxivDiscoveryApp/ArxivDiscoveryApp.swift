@@ -56,7 +56,9 @@ struct ArxivDiscoveryApplication: App {
         .defaultSize(width: 1180, height: 760)
         .commands {
             CommandGroup(after: .newItem) {
-                Button("Search Selected Dates") { model.searchSelectedDates() }
+                Button("Search Selected Dates") {
+                    if !verification.isFrontmost { model.searchSelectedDates() }
+                }
                     .keyboardShortcut("r", modifiers: [.command])
                     .disabled(!model.canChangeLibrary)
             }

@@ -10,6 +10,7 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
     private var model: AppViewModel?
     private var settings: AppSettings?
     private var suiteName: String?
+    var isFrontmost: Bool { window != nil && NSApp.keyWindow === window }
 
     func chooseLibrary(appearance: AppAppearance) {
         if let window { window.makeKeyAndOrderFront(nil); return }
@@ -36,7 +37,9 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
                               styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "Arxiv Discovery — Verification"
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: content)
+        let hosting = NSHostingView(rootView: content)
+        hosting.sizingOptions = []
+        window.contentView = hosting
         window.contentMinSize = NSSize(width: 900, height: 620)
         window.delegate = self
         self.window = window; self.model = model; self.settings = settings; suiteName = name

@@ -33,7 +33,6 @@ struct PaperDetailView: View {
             .padding(24)
         }
         .background(AppTheme.canvas(for: colorScheme))
-        .navigationTitle(paper.shortID)
         .alert("New collection", isPresented: $creatingCollection) {
             TextField("Collection name", text: $collectionName)
             Button("Cancel", role: .cancel) { collectionName = "" }
