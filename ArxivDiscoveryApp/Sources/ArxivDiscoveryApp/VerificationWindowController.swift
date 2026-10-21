@@ -60,10 +60,14 @@ final class VerificationWindowController: NSObject, ObservableObject, NSWindowDe
 
     func exportGeometry() {
         guard let window, let model, let view = window.contentView else { return }
+        func hierarchy(_ view: NSView, depth: Int = 0) -> [String] {
+            guard depth < 10 else { return [] }
+            return ["\(String(repeating: " ", count: depth))\(type(of: view)): \(NSStringFromRect(view.frame)) visible=\(NSStringFromRect(view.visibleRect))"] + view.subviews.flatMap { hierarchy($0, depth: depth + 1) }
+        }
         let values = ["window": NSStringFromRect(window.frame), "content": NSStringFromRect(view.frame),
                       "bounds": NSStringFromRect(view.bounds), "layout": NSStringFromRect(window.contentLayoutRect),
                       "minimum": NSStringFromSize(window.contentMinSize),
-                      "visible": NSStringFromRect(window.screen?.visibleFrame ?? .zero)]
+                      "visible": NSStringFromRect(window.screen?.visibleFrame ?? .zero), "views": hierarchy(view).joined(separator: "\n")]
         if let data = try? JSONEncoder().encode(values) {
             try? data.write(to: model.repository.rootURL.appendingPathComponent("viewport-debug.json"), options: .atomic)
         }

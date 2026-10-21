@@ -9,6 +9,7 @@ struct CleanupView: View {
     @State private var restoring = false
 
     var body: some View {
+      GeometryReader { viewport in
       VStack(spacing: 0) {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
@@ -48,14 +49,13 @@ struct CleanupView: View {
                             .foregroundStyle(model.cleanupError == nil ? Color.primary : Color.red)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    ViewThatFits(in: .horizontal) {
-                        HStack { restoreButton; Spacer(minLength: 16); applyButton }
-                        VStack(alignment: .leading, spacing: 10) { restoreButton; applyButton }
-                    }
+                    HStack { restoreButton; Spacer(minLength: 16); applyButton }
                 }.padding([.horizontal, .bottom], 16)
             }
-            .fixedSize(horizontal: false, vertical: true)
             .background(AppTheme.canvas(for: colorScheme))
+      }
+      .frame(width: viewport.size.width, height: viewport.size.height, alignment: .top)
+      .clipped()
       }
         .background(AppTheme.canvas(for: colorScheme))
         .onAppear { model.previewCleanup() }
