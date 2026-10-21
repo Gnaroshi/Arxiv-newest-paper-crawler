@@ -2,6 +2,7 @@ import Foundation
 
 /// The same title/abstract rule is used for remote discovery and local filtering.
 public struct ResearchTopic: Codable, Hashable, Identifiable, Sendable {
+    private static let vlaContext = ["robot", "robotic", "robotics", "manipulation", "embodied", "visuomotor", "action chunk"]
     public var id: String
     public var name: String
     public var anyTerms: [String]
@@ -27,7 +28,7 @@ public struct ResearchTopic: Codable, Hashable, Identifiable, Sendable {
         guard !excludedTerms.contains(where: contains), requiredTerms.allSatisfy(contains) else { return false }
         return anyTerms.contains { term in
             if id == SmartTopic.vla.rawValue && ["vla", "vlas"].contains(Self.normalize(term)) {
-                return contains(term) && ["robot", "robotic", "robotics", "manipulation", "embodied", "visuomotor", "action chunk"].contains(where: contains)
+                return contains(term) && Self.vlaContext.contains(where: contains)
             }
             return contains(term)
         }
@@ -38,7 +39,13 @@ public struct ResearchTopic: Codable, Hashable, Identifiable, Sendable {
             let safe = Self.normalize(term)
             return "(ti:\"\(safe)\" OR abs:\"\(safe)\")"
         }
-        let any = anyTerms.map(clause).joined(separator: " OR ")
+        let any = anyTerms.map { term in
+            let expression = clause(term)
+            guard id == SmartTopic.vla.rawValue, ["vla", "vlas"].contains(Self.normalize(term)) else { return expression }
+            // VLA also means Very Large Array in astronomy. Apply the same
+            // robotics condition remotely so those pages are never requested.
+            return "(\(expression) AND (\(Self.vlaContext.map(clause).joined(separator: " OR "))))"
+        }.joined(separator: " OR ")
         let required = requiredTerms.map { " AND " + clause($0) }.joined()
         let excluded = excludedTerms.map { " ANDNOT " + clause($0) }.joined()
         return "(\(any))\(required)\(excluded)"

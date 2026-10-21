@@ -20,7 +20,7 @@ enum LibraryScope: Hashable {
 @MainActor
 final class AppViewModel: ObservableObject {
     @Published private(set) var papers: [Paper] = [] { didSet { rebuildIndex() } }
-    @Published private(set) var library = LibraryState() { didSet { refreshFilteredPapers() } }
+    @Published private(set) var library = LibraryState() { didSet { rebuildCounts(); refreshFilteredPapers() } }
     @Published private(set) var discoveryHistory = DiscoveryHistory()
     @Published private(set) var translationUsage = TranslationUsageLedger()
     @Published private(set) var cleanupState = TopicCleanupState()
@@ -40,6 +40,7 @@ final class AppViewModel: ObservableObject {
     private var trashSearchText: [String: String] = [:]
     private var trashLoaded = false
     private var searchIndex = PaperSearchIndex(papers: [], topics: [])
+    private var preparedIndex: PaperSearchIndex?
     private var byID: [String: Paper] = [:]
     private var cachedCollectionCounts: [String: Int] = [:]
     @Published private(set) var inboxCount = 0
@@ -52,6 +53,11 @@ final class AppViewModel: ObservableObject {
     private var searchTask: Task<Void, Never>?
     @Published private(set) var isDiscovering = false
     @Published private(set) var discoveryProgress: String?
+    @Published private(set) var discoveryStartedAt: Date?
+    @Published private(set) var discoveryCompletedDays = 0
+    @Published private(set) var discoveryTotalDays = 0
+    @Published private(set) var discoveryReceivedPapers = 0
+    @Published private(set) var discoveryReport: DiscoveryRunReport?
     private var discoveryTask: Task<Void, Never>?
     @Published private(set) var translatingPaperID: String?
     @Published private(set) var downloadingPaperID: String?
@@ -62,6 +68,7 @@ final class AppViewModel: ObservableObject {
     let settings: AppSettings
     let repository: PaperRepository
     private let client: ArxivSearching
+    private let discovery: DiscoverySearch
     private let gemini = GeminiClient()
     private let keychain = KeychainStore()
     private let version: String
@@ -75,6 +82,7 @@ final class AppViewModel: ObservableObject {
         self.settings = settings
         self.repository = repository
         self.client = client
+        self.discovery = DiscoverySearch(repository: repository, client: client)
         self.version = version
         load()
         topicSubscription = settings.$researchTopics.dropFirst().receive(on: RunLoop.main).sink { [weak self] _ in self?.rebuildIndex() }
@@ -82,7 +90,7 @@ final class AppViewModel: ObservableObject {
 
     var favorites: Set<String> { library.savedPaperIDs }
 
-    private func refreshFilteredPapers() {
+    private func rebuildCounts() {
         inboxCount = 0; newCount = 0; reviewedCount = 0; savedCount = 0
         cachedCollectionCounts = [:]
         for paper in activePapers {
@@ -92,6 +100,9 @@ final class AppViewModel: ObservableObject {
             if progress.savedAt != nil || progress.disposition == .saved { savedCount += 1 }
             for id in progress.collectionIDs { cachedCollectionCounts[id, default: 0] += 1 }
         }
+    }
+
+    private func refreshFilteredPapers() {
         let source = scope == .excluded ? trashPapers : activePapers
         let query = ResearchTopic.normalize(searchText)
         filteredPapers = source.filter { paper in
@@ -122,9 +133,11 @@ final class AppViewModel: ObservableObject {
     private func rebuildIndex() {
         activePapers = papers.filter { cleanupState.excluded[$0.shortID] == nil }
         byID = Dictionary(activePapers.map { ($0.shortID, $0) }, uniquingKeysWith: { _, last in last })
-        searchIndex = PaperSearchIndex(papers: activePapers, topics: settings.researchTopics)
+        searchIndex = preparedIndex ?? PaperSearchIndex(papers: activePapers, topics: settings.researchTopics)
+        preparedIndex = nil
         let subjects = Set(activePapers.flatMap(\.subjects))
         observedSubjects = AppSettings.categories.filter { subjects.contains($0) }
+        rebuildCounts()
         refreshFilteredPapers()
     }
 
@@ -204,8 +217,11 @@ final class AppViewModel: ObservableObject {
         self.selectedPaperID = nil
     }
 
-    func searchSelectedDates() {
-        guard !isDiscovering, !isCleaning, !ShowcaseMode.isEnabled else { return }
+    func searchSelectedDates(forceRefresh: Bool = false, only days: [String]? = nil) {
+        guard canChangeLibrary else {
+            notice = "Finish the current library operation before starting a search."
+            return
+        }
         guard settings.discoveryMode != .topics || !settings.selectedTopics.isEmpty else {
             errorMessage = "Select at least one research topic."
             return
@@ -214,7 +230,7 @@ final class AppViewModel: ObservableObject {
             errorMessage = "Select at least one arXiv category."
             return
         }
-        let validKeys = selectedDiscoveryDays
+        let validKeys = Set(days ?? Array(selectedDiscoveryDays))
             .filter { key in
                 guard let date = DiscoveryDate.date(from: key) else { return false }
                 return date <= Date()
@@ -226,67 +242,50 @@ final class AppViewModel: ObservableObject {
         }
 
         isDiscovering = true
+        discoveryReport = nil
+        discoveryStartedAt = Date()
+        discoveryCompletedDays = 0
+        discoveryTotalDays = validKeys.count
+        discoveryReceivedPapers = 0
         errorMessage = nil
         notice = nil
-        let categories = settings.enabledCategories.sorted()
-        let mode = settings.discoveryMode
-        let topics = settings.enabledTopics.sorted { $0.rawValue < $1.rawValue }
-        let researchTopics = settings.selectedTopics
-        discoveryTask = Task {
+        guard let interval = DiscoveryDate.interval(for: validKeys[0]) else { isDiscovering = false; return }
+        let query = DiscoveryQuery(interval: interval, categories: settings.enabledCategories.sorted(), mode: settings.discoveryMode, researchTopics: settings.selectedTopics)
+        var policy = DiscoveryPolicy()
+        policy.retentionDays = settings.cacheRetentionDays
+        discoveryTask = Task { [self] in
             defer { isDiscovering = false; discoveryProgress = nil; discoveryTask = nil }
-            var merged = papers
-            var updatedHistory = discoveryHistory
-            var totalFound = 0
-            var failures: [String] = []
-            for (index, key) in validKeys.enumerated() {
-                guard !Task.isCancelled else { break }
-                discoveryProgress = "Searching \(index + 1) of \(validKeys.count) dates · \(key)"
-                guard let interval = DiscoveryDate.interval(for: key) else { continue }
-                let query = DiscoveryQuery(interval: interval, maxResults: 500, categories: categories, mode: mode, topics: topics, researchTopics: researchTopics)
-                do {
-                    let searchedAt = Date()
-                    let batch = try await client.discoverBatch(query: query, now: searchedAt)
-                    let discovered = batch.papers.filter { cleanupState.excluded[$0.shortID] == nil }
-                    merged = repository.merge(existing: merged, discovered: discovered)
-                    totalFound += discovered.count
-                    updatedHistory.record(.init(
-                        day: key,
-                        lastSearchedAt: searchedAt,
-                        paperCount: discovered.count,
-                        categories: categories,
-                        isComplete: batch.isComplete,
-                        mode: mode,
-                        topics: topics,
-                        researchTopics: researchTopics
-                    ))
-                } catch {
-                    if Task.isCancelled { break }
-                    failures.append(key)
-                }
-            }
             do {
-                updatedHistory.prune()
-                merged = repository.prunedPapers(
-                    merged,
-                    library: library,
-                    retentionDays: settings.cacheRetentionDays,
-                    excludedIDs: Set(cleanupState.excluded.keys)
-                )
-                try repository.savePapers(merged)
-                try repository.saveDiscoveryHistory(updatedHistory)
-                papers = merged
-                discoveryHistory = updatedHistory
-                lastRefresh = Date()
-                if Task.isCancelled {
-                    notice = "Search cancelled. Kept \(totalFound) results received so far."
-                } else if failures.isEmpty {
-                    notice = "Found \(totalFound) papers across \(validKeys.count) selected date\(validKeys.count == 1 ? "" : "s")."
-                } else {
-                    errorMessage = "Search finished, but \(failures.joined(separator: ", ")) could not be fetched."
+                let report = try await discovery.search(days: validKeys, template: query, forceRefresh: forceRefresh, policy: policy) { [weak self] progress in
+                    await self?.showDiscoveryProgress(progress)
                 }
-                try writeStatus(availability: papers.isEmpty ? "empty" : "ready")
+                discoveryReport = report
+                discoveryProgress = "Updating the paper list…"
+                let snapshot = try await discovery.snapshot()
+                let rules = settings.researchTopics
+                let excluded = Set(cleanupState.excluded.keys)
+                let index = await Task.detached(priority: .userInitiated) {
+                    PaperSearchIndex(papers: snapshot.papers.filter { !excluded.contains($0.shortID) }, topics: rules)
+                }.value
+                preparedIndex = settings.researchTopics == rules ? index : nil
+                papers = snapshot.papers
+                discoveryHistory = snapshot.history
+                lastRefresh = snapshot.history.days.values.map(\.lastSearchedAt).max()
+                let kept = "\(report.receivedPapers) matching papers saved · \(String(format: "%.1f", report.elapsedSeconds))s."
+                if report.storageFailed {
+                    errorMessage = "\(report.failures.last?.message ?? "Search results could not be fully saved.") Check local storage before retrying."
+                } else if report.pendingDays.isEmpty {
+                    notice = report.requestCount == 0 ? "Using saved results for \(report.cachedDays.count) dates. No network requests." : "Search complete. \(kept)"
+                } else if report.cancelled {
+                    notice = "Search cancelled. \(kept) \(report.pendingDays.count) dates unfinished."
+                } else if report.timedOut {
+                    errorMessage = "Search stopped at the overall time limit. \(kept) \(report.pendingDays.count) dates unfinished."
+                } else {
+                    errorMessage = "\(report.failures.first?.message ?? "More results remain; retry unfinished dates.") \(kept) \(report.pendingDays.count) dates unfinished."
+                }
+                try? writeStatus(availability: report.pendingDays.isEmpty ? "ready" : "partial")
             } catch {
-                errorMessage = "Local data could not be updated. \(error.localizedDescription)"
+                errorMessage = "The search could not finish. Existing papers are kept. \(error.localizedDescription)"
                 try? writeStatus(availability: papers.isEmpty ? "unavailable" : "partial", errorCode: "discovery_save_failed")
             }
         }
@@ -294,18 +293,36 @@ final class AppViewModel: ObservableObject {
 
     func cancelDiscovery() { discoveryTask?.cancel() }
 
+    func retryUnfinishedDates() {
+        guard let report = discoveryReport, !report.pendingDays.isEmpty else { return }
+        // Preserve range/page-cache identity; complete dates are reused locally.
+        searchSelectedDates(only: report.selectedDays)
+    }
+
+    private func showDiscoveryProgress(_ progress: DiscoveryProgress) {
+        discoveryProgress = progress.message
+        discoveryCompletedDays = progress.completedDays
+        discoveryTotalDays = progress.totalDays
+        discoveryReceivedPapers = progress.receivedPapers
+    }
+
     func previewCleanup() {
+        guard canChangeLibrary else { return }
         cleanupPreview = nil
-        do {
-            cleanupPreview = try repository.previewTopicCleanup(
-                topics: settings.enabledTopics.sorted { $0.rawValue < $1.rawValue },
-                papers: papers,
-                library: library,
-                state: cleanupState,
-                researchTopics: settings.selectedTopics
-            )
-        } catch {
-            errorMessage = error.localizedDescription
+        isCleaning = true
+        let repository = repository
+        let papers = papers
+        let library = library
+        let state = cleanupState
+        let rules = settings.selectedTopics
+        Task {
+            defer { isCleaning = false }
+            do {
+                let preview = try await Task.detached(priority: .userInitiated) {
+                    try repository.previewTopicCleanup(topics: [], papers: papers, library: library, state: state, researchTopics: rules)
+                }.value
+                cleanupPreview = settings.selectedTopics == rules ? preview : nil
+            } catch { errorMessage = error.localizedDescription }
         }
     }
 
@@ -366,7 +383,7 @@ final class AppViewModel: ObservableObject {
                 excludedCount = trashPapers.count
                 refreshFilteredPapers()
                 reconcileSelection()
-                if scope == .cleanup { previewCleanup() }
+                cleanupPreview = nil
                 notice = result.0
                 try? writeStatus(availability: activePapers.isEmpty ? "empty" : "ready")
             } catch {
@@ -380,7 +397,7 @@ final class AppViewModel: ObservableObject {
     }
 
     func markReviewed(_ paper: Paper) {
-        guard !isCleaning else { return }
+        guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.markReviewed(paper.shortID)
         persistLibrary(notice: "Moved to Reviewed.")
@@ -388,14 +405,14 @@ final class AppViewModel: ObservableObject {
     }
 
     func moveToInbox(_ paper: Paper) {
-        guard !isCleaning else { return }
+        guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.moveToInbox(paper.shortID)
         persistLibrary(notice: "Moved to Inbox.")
     }
 
     func toggleSaved(_ paper: Paper) {
-        guard !isCleaning else { return }
+        guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
         let progress = library.progress(for: paper.shortID)
         let saving = progress.savedAt == nil && progress.disposition != .saved
@@ -406,7 +423,7 @@ final class AppViewModel: ObservableObject {
 
     @discardableResult
     func createCollection(named name: String, adding paper: Paper? = nil) -> Bool {
-        guard !isCleaning else { return false }
+        guard canChangeLibrary else { return false }
         guard let collection = library.createCollection(named: name) else {
             errorMessage = "Use a non-empty, unique collection name."
             return false
@@ -417,35 +434,52 @@ final class AppViewModel: ObservableObject {
     }
 
     func setCollection(_ collectionID: String, contains paper: Paper, enabled: Bool) {
-        guard !isCleaning else { return }
+        guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.setCollection(collectionID, contains: paper.shortID, enabled: enabled)
         persistLibrary()
     }
 
     func saveNote(_ note: String, for paper: Paper) {
-        guard !isCleaning else { return }
+        guard canChangeLibrary else { return }
         guard restoreBeforeKeeping(paper) else { return }
         library.setNote(note, paperID: paper.shortID)
         persistLibrary(notice: "Note saved.")
     }
 
     func importLegacy(from url: URL) {
+        guard canChangeLibrary else {
+            notice = "Finish the current library operation before importing."
+            return
+        }
+        isCleaning = true
         let accessing = url.startAccessingSecurityScopedResource()
-        defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-        do {
-            let result = try repository.importLegacy(papers: url)
-            papers = try repository.loadPapers()
-            library = try repository.loadLibraryState()
-            notice = "Imported \(result.importedPaperCount) papers and \(result.importedFavoriteCount) saved IDs."
-            try writeStatus(availability: papers.isEmpty ? "empty" : "ready")
-        } catch {
-            errorMessage = "The selected JSON could not be imported. \(error.localizedDescription)"
+        let repository = repository
+        let rules = settings.researchTopics
+        Task {
+            defer {
+                if accessing { url.stopAccessingSecurityScopedResource() }
+                isCleaning = false
+            }
+            do {
+                let result = try await Task.detached(priority: .userInitiated) {
+                    let imported = try repository.importLegacy(papers: url)
+                    let values = try repository.loadPapers()
+                    return (imported, values, try repository.loadLibraryState(), PaperSearchIndex(papers: values, topics: rules))
+                }.value
+                preparedIndex = settings.researchTopics == rules ? result.3 : nil
+                papers = result.1
+                library = result.2
+                notice = "Imported \(result.0.importedPaperCount) papers and \(result.0.importedFavoriteCount) saved IDs."
+                try writeStatus(availability: papers.isEmpty ? "empty" : "ready")
+            } catch {
+                errorMessage = "The selected JSON could not be imported. \(error.localizedDescription)"
+            }
         }
     }
 
     func translate(_ paper: Paper) {
-        guard translatingPaperID == nil, !isCleaning, !isDiscovering else { return }
+        guard canChangeLibrary else { return }
         do {
             guard let apiKey = try keychain.read(), !apiKey.isEmpty else {
                 errorMessage = "Add a Gemini API key in Settings before translating."
@@ -508,21 +542,24 @@ final class AppViewModel: ObservableObject {
     }
 
     func downloadPDF(_ paper: Paper) {
-        guard downloadingPaperID == nil, !isCleaning, let url = paper.downloadablePDFURL else { return }
+        guard canChangeLibrary, let url = paper.downloadablePDFURL else { return }
         downloadingPaperID = paper.shortID
         errorMessage = nil
         Task {
             defer { downloadingPaperID = nil }
             do {
-                let (temporaryURL, response) = try await URLSession.shared.download(from: url)
-                guard let httpResponse = response as? HTTPURLResponse,
-                      (200...299).contains(httpResponse.statusCode)
+                let (temporaryURL, response) = try await BoundedHTTPClient().download(for: URLRequest(url: url))
+                defer { try? FileManager.default.removeItem(at: temporaryURL) }
+                guard (200...299).contains(response.statusCode)
                 else { throw URLError(.badServerResponse) }
-                let destination = try repository.storeDownloadedPDF(
-                    from: temporaryURL,
-                    for: paper,
-                    style: settings.pdfNameStyle
-                )
+                let repository = repository
+                let style = settings.pdfNameStyle
+                let destination = try await Task.detached(priority: .userInitiated) {
+                    let header = try FileHandle(forReadingFrom: temporaryURL)
+                    defer { try? header.close() }
+                    guard try header.read(upToCount: 5) == Data("%PDF-".utf8) else { throw HTTPTransferError.invalidResponse }
+                    return try repository.storeDownloadedPDF(from: temporaryURL, for: paper, style: style)
+                }.value
                 notice = "PDF downloaded as \(destination.lastPathComponent)."
                 NSWorkspace.shared.open(destination)
             } catch {

@@ -3,6 +3,8 @@ from __future__ import annotations
 import time
 from typing import Any
 
+from arxiv_discovery.network import gemini_http_options
+
 from .config import Settings
 
 
@@ -21,9 +23,11 @@ def _build_model(settings: Settings):
         return None
 
     try:
-        return genai.Client(api_key=settings.google_api_key)
-    except Exception as exc:
-        print(f"Failed to configure Gemini: {exc}")
+        return genai.Client(
+            api_key=settings.google_api_key, http_options=gemini_http_options()
+        )
+    except Exception:
+        print("Failed to configure Gemini.")
         return None
 
 
@@ -61,11 +65,14 @@ def process_papers_with_gemini(
             translated_text = getattr(response, "text", "").strip()
             if translated_text:
                 translated_paper["abstract_ko"] = translated_text
-        except Exception as exc:
-            print(f"Failed to translate: {paper['title'][:30]}... - {exc}")
+        except Exception:
+            print(f"Failed to translate: {paper['title'][:30]}...")
 
         processed_papers.append(translated_paper)
         time.sleep(settings.translation_delay_seconds)
 
     print("Translation complete")
+    close = getattr(model, "close", None)
+    if callable(close):
+        close()
     return processed_papers

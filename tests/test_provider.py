@@ -100,11 +100,17 @@ def test_discovery_defaults_to_no_download_and_does_not_translate(
     assert not settings.data_dir.exists()
 
 
-def test_selected_and_all_download_modes_are_explicit(tmp_path: Path) -> None:
+def test_selected_and_all_download_modes_are_explicit(
+    tmp_path: Path, monkeypatch
+) -> None:
     settings = load_settings(tmp_path).with_overrides(
         timezone="UTC", cutoff_time="00:00", days=2
     )
     downloads: list[str] = []
+    monkeypatch.setattr(
+        "arxiv_discovery.collector.download_pdf",
+        lambda url, _path: downloads.append(url.rsplit("/", 1)[-1]),
+    )
 
     def result(identifier: str):
         return SimpleNamespace(
@@ -130,7 +136,9 @@ def test_selected_and_all_download_modes_are_explicit(tmp_path: Path) -> None:
     )
     assert downloads == ["2401.00002v2"]
     assert "local_pdf_path" not in selected[0]
-    assert selected[1]["local_pdf_path"].endswith("Fixture 2401.00002v2.pdf")
+    assert selected[1]["local_pdf_path"].endswith(
+        "Fixture 2401.00002v2 [2401.00002v2].pdf"
+    )
 
     downloads.clear()
     all_papers = collect_papers(

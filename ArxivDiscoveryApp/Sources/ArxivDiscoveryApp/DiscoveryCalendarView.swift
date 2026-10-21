@@ -52,7 +52,7 @@ struct DiscoveryCalendarView: View {
             }
             HStack(spacing: 18) {
                 legend(color: AppTheme.teal, text: "Searched")
-                legend(color: AppTheme.orange, text: "Scope changed")
+                legend(color: AppTheme.orange, text: "Needs search")
                 legend(color: .secondary, text: "Not searched")
             }.font(.caption)
           }.padding(20).frame(maxWidth: 960, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
@@ -70,6 +70,13 @@ struct DiscoveryCalendarView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let progress = model.discoveryProgress { Text(progress).font(.caption).foregroundStyle(.secondary) }
+            if model.isDiscovering, let started = model.discoveryStartedAt {
+                ProgressView(value: Double(model.discoveryCompletedDays), total: Double(max(1, model.discoveryTotalDays)))
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    Text("\(Int(context.date.timeIntervalSince(started)))s elapsed · \(model.discoveryCompletedDays)/\(model.discoveryTotalDays) dates complete · \(model.discoveryReceivedPapers) matching papers saved · 45s search limit")
+                        .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
             VStack(alignment: .leading, spacing: 12) {
               HStack {
                 Button("Select unsearched") { selectUnsearchedMonth() }
@@ -93,8 +100,19 @@ struct DiscoveryCalendarView: View {
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.sky)
                 .foregroundStyle(Color.black.opacity(0.82))
-                .disabled(model.selectedDiscoveryDays.isEmpty || model.isDiscovering || ShowcaseMode.isEnabled || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
+                .disabled(model.selectedDiscoveryDays.isEmpty || !model.canChangeLibrary || (settings.discoveryMode == .topics ? settings.selectedTopics.isEmpty : settings.enabledCategories.isEmpty))
                 if model.isDiscovering { Button("Cancel search") { model.cancelDiscovery() } }
+                else {
+                    HStack {
+                        if model.discoveryReport?.pendingDays.isEmpty == false {
+                            Button("Retry unfinished dates") { model.retryUnfinishedDates() }
+                        }
+                        Menu {
+                            Button("Refresh selected dates (ignore saved results)") { model.searchSelectedDates(forceRefresh: true) }
+                        } label: { Label("Search options", systemImage: "ellipsis.circle") }
+                            .menuStyle(.borderlessButton).fixedSize()
+                    }
+                }
             }
         }.frame(maxWidth: 928, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -103,10 +121,11 @@ struct DiscoveryCalendarView: View {
         let key = DiscoveryDate.key(for: date)
         let record = model.discoveryHistory.days[key]
         let covers = record?.covers(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true
+        let matchesScope = record?.matchesScope(mode: settings.discoveryMode, categories: settings.enabledCategories, researchTopics: settings.selectedTopics) == true
         let isSelected = model.selectedDiscoveryDays.contains(key)
         let isFuture = date > Date()
         let count = record.map { record in
-            covers ? (record.isComplete ? "\(record.paperCount)" : "\(record.paperCount)+") : "—"
+            matchesScope ? (record.isComplete ? "\(record.paperCount)" : "\(record.paperCount)+") : "—"
         }
 
         return Button {
@@ -133,7 +152,7 @@ struct DiscoveryCalendarView: View {
                         .lineLimit(1)
                 } else if record != nil {
                     Image(systemName: "arrow.clockwise").font(.caption2).foregroundStyle(AppTheme.orange)
-                        .help("Search again after changing topics")
+                        .help(matchesScope ? "Partial results; search again to continue" : "Search again after changing topics")
                 }
             }
             .frame(maxWidth: .infinity, minHeight: 56, alignment: .topLeading)

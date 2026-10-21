@@ -9,6 +9,8 @@ public enum ArxivClientError: LocalizedError, Equatable {
     case httpStatus(Int)
     case responseTooLarge
     case malformedFeed
+    case rateLimited(TimeInterval?)
+    case serviceUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -22,18 +24,31 @@ public enum ArxivClientError: LocalizedError, Equatable {
             "The arXiv response exceeded the safe size limit."
         case .malformedFeed:
             "The arXiv feed could not be parsed."
+        case .rateLimited:
+            "arXiv is limiting requests. Saved results are kept; try unfinished dates later."
+        case .serviceUnavailable:
+            "arXiv is temporarily unavailable. Saved results are kept; try unfinished dates later."
         }
     }
 }
 
-public protocol ArxivSearching {
+public protocol ArxivSearching: Sendable {
     func discover(query: DiscoveryQuery, now: Date) async throws -> [Paper]
     func discoverBatch(query: DiscoveryQuery, now: Date) async throws -> ArxivSearchBatch
 }
 
-public struct ArxivSearchBatch: Sendable {
+public struct ArxivSearchBatch: Codable, Sendable {
     public var papers: [Paper]
     public var isComplete: Bool
+    public var rawCount: Int
+    public var totalResults: Int?
+
+    public init(papers: [Paper], isComplete: Bool, rawCount: Int? = nil, totalResults: Int? = nil) {
+        self.papers = papers
+        self.isComplete = isComplete
+        self.rawCount = rawCount ?? papers.count
+        self.totalResults = totalResults
+    }
 }
 
 public extension ArxivSearching {
@@ -44,7 +59,7 @@ public extension ArxivSearching {
 }
 
 public struct ArxivClient: ArxivSearching {
-    private let session: URLSession
+    private let transport: BoundedHTTPClient
     private let endpoint: URL
     private let maximumResponseBytes = 10 * 1024 * 1024
 
@@ -52,7 +67,7 @@ public struct ArxivClient: ArxivSearching {
         session: URLSession = .shared,
         endpoint: URL = URL(string: "https://export.arxiv.org/api/query")!
     ) {
-        self.session = session
+        self.transport = BoundedHTTPClient(configuration: session.configuration)
         self.endpoint = endpoint
     }
 
@@ -67,7 +82,7 @@ public struct ArxivClient: ArxivSearching {
         guard let searchQuery = query.searchExpression else { throw ArxivClientError.invalidRequest }
         components.queryItems = [
             URLQueryItem(name: "search_query", value: searchQuery),
-            URLQueryItem(name: "start", value: "0"),
+            URLQueryItem(name: "start", value: String(query.start)),
             URLQueryItem(name: "max_results", value: String(query.maxResults)),
             URLQueryItem(name: "sortBy", value: "submittedDate"),
             URLQueryItem(name: "sortOrder", value: "descending")
@@ -75,14 +90,15 @@ public struct ArxivClient: ArxivSearching {
         guard let url = components.url else { throw ArxivClientError.invalidRequest }
 
         var request = URLRequest(url: url)
-        request.timeoutInterval = 30
+        request.timeoutInterval = query.timeoutSeconds
         request.setValue("ArxivDiscovery/0.4.0 (https://github.com/Gnaroshi/Arxiv-newest-paper-crawler)", forHTTPHeaderField: "User-Agent")
         request.setValue("application/atom+xml", forHTTPHeaderField: "Accept")
 
-        let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw ArxivClientError.invalidResponse
+        let (data, httpResponse) = try await transport.data(for: request, timeout: query.timeoutSeconds, maximumBytes: maximumResponseBytes)
+        if httpResponse.statusCode == 429 {
+            throw ArxivClientError.rateLimited(httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init))
         }
+        if (500...599).contains(httpResponse.statusCode) { throw ArxivClientError.serviceUnavailable }
         guard (200...299).contains(httpResponse.statusCode) else {
             throw ArxivClientError.httpStatus(httpResponse.statusCode)
         }
@@ -90,26 +106,36 @@ public struct ArxivClient: ArxivSearching {
             throw ArxivClientError.responseTooLarge
         }
 
-        let papers = try ArxivFeedParser.parse(data: data, crawledAt: now)
+        let feed = try ArxivFeedParser.parsePage(data: data, crawledAt: now)
+        let papers = feed.papers
         let accepted = papers
             .filter { $0.publishedAt >= query.interval.start && $0.publishedAt < query.interval.end }
             .filter { query.accepts($0) }
             .sorted { $0.publishedAt > $1.publishedAt }
-        return ArxivSearchBatch(papers: accepted, isComplete: papers.count < query.maxResults)
+        let complete = feed.totalResults.map { query.start + feed.rawCount >= $0 } ?? (feed.rawCount < query.maxResults)
+        return ArxivSearchBatch(papers: accepted, isComplete: complete, rawCount: feed.rawCount, totalResults: feed.totalResults)
     }
 
 }
 
 public enum ArxivFeedParser {
     public static func parse(data: Data, crawledAt: Date = Date()) throws -> [Paper] {
+        try parsePage(data: data, crawledAt: crawledAt).papers
+    }
+
+    public static func parsePage(data: Data, crawledAt: Date = Date()) throws -> ArxivSearchBatch {
+        guard data.range(of: Data("<!DOCTYPE".utf8)) == nil else { throw ArxivClientError.malformedFeed }
         let delegate = FeedDelegate(crawledAt: crawledAt)
         let parser = XMLParser(data: data)
         parser.delegate = delegate
         parser.shouldProcessNamespaces = false
-        guard parser.parse(), delegate.error == nil else {
-            throw delegate.error ?? ArxivClientError.malformedFeed
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), delegate.error == nil, delegate.sawFeed,
+              delegate.rawCount > 0 || delegate.totalResults == 0,
+              delegate.rawCount == delegate.papers.count else {
+            throw ArxivClientError.malformedFeed
         }
-        return delegate.papers
+        return ArxivSearchBatch(papers: delegate.papers, isComplete: true, rawCount: delegate.rawCount, totalResults: delegate.totalResults)
     }
 }
 
@@ -127,11 +153,15 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     let crawledAt: Date
     var papers: [Paper] = []
     var error: Error?
+    var sawFeed = false
+    var rawCount = 0
+    var totalResults: Int?
 
     private var entry: Entry?
     private var currentElement = ""
     private var text = ""
     private var insideAuthor = false
+    private var depth = 0
 
     init(crawledAt: Date) {
         self.crawledAt = crawledAt
@@ -146,7 +176,15 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     ) {
         currentElement = elementName
         text = ""
+        if depth == 0 && elementName != "feed" {
+            error = ArxivClientError.malformedFeed
+            parser.abortParsing()
+            return
+        }
+        depth += 1
+        if elementName == "feed" { sawFeed = true }
         if elementName == "entry" {
+            rawCount += 1
             entry = Entry()
         } else if elementName == "author" {
             insideAuthor = true
@@ -170,8 +208,10 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
         namespaceURI: String?,
         qualifiedName qName: String?
     ) {
+        depth -= 1
         let normalized = text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
         switch elementName {
+        case "opensearch:totalResults": totalResults = Int(normalized)
         case "id": entry?.entryID = normalized
         case "title": entry?.title = normalized
         case "summary": entry?.abstract = normalized
@@ -193,6 +233,7 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     private func finishEntry() {
         defer { entry = nil }
         guard let entry,
+              !entry.entryID.contains("api/errors"),
               !entry.entryID.isEmpty,
               !entry.title.isEmpty,
               !entry.abstract.isEmpty,
@@ -217,7 +258,7 @@ private final class FeedDelegate: NSObject, XMLParserDelegate {
     }
 
     private static func shortID(from entryID: String) -> String {
-        let raw = URL(string: entryID)?.lastPathComponent ?? entryID
+        let raw = entryID.components(separatedBy: "/abs/").last ?? entryID
         return raw.replacingOccurrences(of: #"v\d+$"#, with: "", options: .regularExpression)
     }
 }

@@ -35,7 +35,7 @@ struct ArxivDiscoveryApplication: App {
             CommandGroup(after: .newItem) {
                 Button("Search Selected Dates") { model.searchSelectedDates() }
                     .keyboardShortcut("r", modifiers: [.command])
-                    .disabled(model.isDiscovering || ShowcaseMode.isEnabled)
+                    .disabled(!model.canChangeLibrary)
             }
         }
 

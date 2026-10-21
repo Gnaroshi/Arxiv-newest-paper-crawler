@@ -307,7 +307,8 @@ do {
     try checkRecoverableCleanup()
     try checkCustomTopics()
     try checkTrashMigration()
-    print("ArxivDiscoveryCoreChecks passed (11 checks).")
+    try await checkDiscoveryNetworking()
+    print("ArxivDiscoveryCoreChecks passed (11 core groups + discovery network regression suite).")
 } catch {
     FileHandle.standardError.write(Data("ArxivDiscoveryCoreChecks failed: \(error)\n".utf8))
     exit(EXIT_FAILURE)

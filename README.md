@@ -47,6 +47,9 @@ The app owns `~/Library/Application Support/dev.gnaroshi.ArxivDiscovery/`:
 - `favorites.json`: saved arXiv IDs
 - `library.json`: Inbox/Reviewed/Saved state, collections, and notes
 - `discovery-history.json`: searched UTC dates, subject coverage, counts, and last search times
+- `last-discovery.json`: terminal search outcome, timing, partial results and failure reason
+- `Cache/Discovery/`: response pages reused for six hours, capped at 128 files / 64 MB
+- `pdf-index.json`: paper-to-local-PDF ownership, avoiding same-title collisions
 - `translation-usage.json`: app-local Gemini request and token totals
 - `cleanup-state.json`: removal tombstones, preventing silent rediscovery
 - `trash.json`: removed paper metadata, loaded only when Trash is opened
@@ -59,6 +62,10 @@ Use the app Import command to merge an older `data/papers.json`. When a sibling 
 ## Topic Discovery and Cleanup
 
 In Calendar, choose **Research topics**, then **Find or create topics**. Search existing rules or create a named topic with comma-separated **Match any**, optional **Require all**, and **Exclude any** phrases. Select the topics and dates, then choose **Find topic papers**. VLA and World Models are included by default. Matching uses titles and abstracts, including robotics context for the VLA acronym. **arXiv categories** is a separate broad mode that fetches entire selected categories. Editing a rule invalidates previous calendar coverage for that rule.
+
+Adjacent selected dates share one range query; nonadjacent dates never include unselected days. Results are paged and saved after every page, off the UI thread. The calendar shows elapsed time, completed dates, matching papers saved, and Cancel. A request has a 12-second wall-clock limit and the search has a 45-second network budget. arXiv requests are serial and spaced at least three seconds apart, following its [API guidance](https://info.arxiv.org/help/api/tou.html). Service errors and rate limits stop the batch instead of repeating the same failure for every date.
+
+Complete coverage and response pages are reused for six hours. **Retry unfinished dates** resumes partial pages; **Search options → Refresh selected dates (ignore saved results)** explicitly bypasses the cache. Partial dates remain marked as needing search. Large searches may require another run; a time/page limit is never reported as complete. `last-discovery.json` records the outcome without credentials.
 
 Open **Cleanup** to preview unrelated unread Inbox papers, then choose **Move unrelated to Trash**. Saved, Reviewed, viewed papers, collection members, notes, translations, and downloaded PDFs are protected. Removed metadata leaves the active array and remains in **Trash**. Restore one paper there, or choose **Undo last cleanup** to restore the latest batch. Backups are written before changes. PDFs and notes are never deleted by cleanup.
 

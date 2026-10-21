@@ -83,8 +83,8 @@ final class AppSettings: ObservableObject {
             return migrated
         }
         selectedTopicIDs = Set(UserDefaults.standard.stringArray(forKey: "selectedTopicIDs") ?? storedTopics ?? SmartTopic.allCases.map(\.rawValue))
-        let storedCategories = UserDefaults.standard.stringArray(forKey: "enabledCategories") ?? []
-        enabledCategories = storedCategories.isEmpty ? Set(Self.categories) : Set(storedCategories)
+        let storedCategories = UserDefaults.standard.stringArray(forKey: "enabledCategories")
+        enabledCategories = storedCategories.map(Set.init) ?? Set(Self.categories)
         appearance = AppAppearance(rawValue: UserDefaults.standard.string(forKey: "appearance") ?? "") ?? .system
         geminiModel = UserDefaults.standard.string(forKey: "geminiModel") ?? Self.defaultGeminiModel
         pdfNameStyle = PDFNameStyle(rawValue: UserDefaults.standard.string(forKey: "pdfNameStyle") ?? "") ?? .title

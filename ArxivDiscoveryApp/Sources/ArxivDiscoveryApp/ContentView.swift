@@ -34,6 +34,7 @@ struct ContentView: View {
             ToolbarItem {
                 Menu {
                     Button("Import previous papers.json") { importingLegacy = true }
+                        .disabled(!model.canChangeLibrary)
                     Button("Open data folder") { model.openDataFolder() }
                     Button("Manage research topics") { managingTopics = true }
                 } label: {

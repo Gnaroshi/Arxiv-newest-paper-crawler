@@ -2,11 +2,13 @@
 
 ## Ownership
 
-`ArxivDiscoveryApp` is a Swift package with three targets:
+`ArxivDiscoveryApp` is a Swift package with five targets:
 
 - `ArxivDiscoveryCore`: arXiv Atom parsing, domain models, merge rules, local JSON storage, and safe status records.
 - `ArxivDiscoveryApp`: SwiftUI presentation, triage/collection/note state, calendar discovery, Keychain access, optional Gemini translation, explicit PDF download, and legacy import.
 - `ArxivDiscoveryIntegration`: fixed JSON status and private backup-export executable bundled with the app.
+- `ArxivDiscoveryMaintenance`: explicit local repair operations and a read-only search probe using an isolated temporary repository.
+- `ArxivDiscoveryCoreChecks`: local parser, workflow, storage, performance and adversarial network fixtures.
 
 The Python package continues to own its CLI collection path and the legacy repository-local `data/` layout. It does not serve UI.
 
@@ -30,8 +32,14 @@ The native source of truth is:
 ## Network boundaries
 
 - Discovery performs a bounded read from the public arXiv Atom API.
+- `DiscoverySearch` is the serial actor owning date grouping, paging, request spacing, a six-hour bounded page cache and per-page checkpoints. It never calls Gemini or downloads PDFs. The main actor receives only progress and a final snapshot; index preparation runs off-main.
+- Adjacent selected UTC days share ranges of at most 31 days. Requests return up to 200 raw entries per page. Completeness uses OpenSearch totals/raw entry counts, not the number surviving topic filters. Saved pages do not consume the next run's ten-request budget.
+- `BoundedHTTPClient` owns the live task, streaming byte cap, wall-clock timer and cancellation continuation. Discovery uses 12 seconds per request within a 45-second total network budget, with at least three seconds between starts. A 429 applies cooldown; 5xx/invalid feeds fail fast. Partial results are preserved and never become complete coverage.
+- Discovery JSON/parsing/checkpoint work, cleanup previews and legacy import run outside the main actor. Library mutations and discovery are mutually excluded. Notes, favorites and collections are not replaced by discovery.
 - Translation sends only the selected public title and abstract to the Gemini API after the user presses Translate.
 - PDF download requests only the selected public PDF URL.
+- Native PDF transfers stream to a temporary file, with a 45-second / 100-MB cap. File ownership is indexed and collisions never replace a reading copy. Gemini model loading and translation have 15-second and 30-second limits respectively, without automatic retry.
+- Compatibility Python requests have explicit 5-second connect / 10-second read limits and no SDK retries. Gemini requests have a 30-second limit and one attempt. CLI PDF downloads stream to an exclusive temporary file and retain existing reading copies; their elapsed limit is checked between chunks, so a final read can add up to the read timeout. These CLI limits are not the native search's wall-clock deadline.
 - No background server, inbound port, analytics, or remote persistence is used.
 
 ## Studio boundary

@@ -10,6 +10,7 @@ import arxiv
 
 from .config import Settings
 from .models import StoredPaper
+from .network import configure_arxiv_client, download_pdf
 
 
 def sanitize_filename(name: str) -> str:
@@ -58,8 +59,13 @@ def _download_pdf(
     primary_subject = result.categories[0] if result.categories else "Uncategorized"
     subject_dir = settings.pdfs_dir / primary_subject
     subject_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{sanitize_filename(result.title)}.pdf"
-    result.download_pdf(dirpath=str(subject_dir), filename=filename)
+    title = (
+        sanitize_filename(result.title)
+        .encode("utf-8")[:180]
+        .decode("utf-8", errors="ignore")
+    )
+    filename = f"{title} [{sanitize_filename(result.get_short_id())}].pdf"
+    download_pdf(result.pdf_url, subject_dir / filename)
     paper["local_pdf_path"] = str(Path(primary_subject) / filename)
     diagnostic(f"Downloaded PDF: {subject_dir / filename}")
 
@@ -85,9 +91,15 @@ def collect_papers(
         f"Collecting up to {settings.max_results} papers in "
         f"{','.join(settings.categories)} from {start.isoformat()} to {end.isoformat()}"
     )
-    query = " OR ".join(f"cat:{category}" for category in settings.categories)
+    categories = " OR ".join(f"cat:{category}" for category in settings.categories)
+    end_minute = end - dt.timedelta(minutes=1)
+    query = (
+        f"({categories}) AND submittedDate:"
+        f"[{start:%Y%m%d%H%M} TO {end_minute:%Y%m%d%H%M}]"
+    )
+    client = None
     if results is None:
-        client = arxiv.Client()
+        client = configure_arxiv_client(arxiv.Client())
         search = arxiv.Search(
             query=query,
             max_results=settings.max_results,
@@ -120,6 +132,9 @@ def collect_papers(
                     diagnostic(f"Failed to download PDF: {result.title[:30]}...")
     except arxiv.UnexpectedEmptyPageError:
         diagnostic("Reached the end of arXiv search results.")
+    finally:
+        if client is not None:
+            client._session.close()
     diagnostic(f"Found {len(papers)} paper(s)")
     return papers
 

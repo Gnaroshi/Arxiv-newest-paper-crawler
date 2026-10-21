@@ -80,6 +80,7 @@ struct PaperDetailView: View {
             HStack(spacing: 10) { decisionButtons }
             VStack(alignment: .leading, spacing: 8) { decisionButtons }
         }
+        .disabled(!model.canChangeLibrary)
     }
 
     @ViewBuilder
@@ -151,7 +152,7 @@ struct PaperDetailView: View {
                 Label(paper.abstractKO == nil ? "Translate to Korean" : "Translate again", systemImage: "character.book.closed")
             }
         }
-        .disabled(model.translatingPaperID != nil || ShowcaseMode.isEnabled)
+        .disabled(!model.canChangeLibrary)
 
         Button { model.openPDF(paper) } label: {
             if model.downloadingPaperID == paper.shortID {
@@ -160,7 +161,7 @@ struct PaperDetailView: View {
                 Label(model.hasLocalPDF(paper) ? "Open PDF" : "Download PDF", systemImage: model.hasLocalPDF(paper) ? "doc.richtext" : "arrow.down.circle")
             }
         }
-        .disabled(model.downloadingPaperID != nil || ShowcaseMode.isEnabled)
+        .disabled(!model.canChangeLibrary)
     }
 
     private var abstractSection: some View {
@@ -189,7 +190,7 @@ struct PaperDetailView: View {
                 Text("Note").font(.headline)
                 Spacer()
                 Button("Save note") { model.saveNote(note, for: paper) }
-                    .disabled(model.scope == .excluded || model.isCleaning || note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
+                    .disabled(model.scope == .excluded || !model.canChangeLibrary || note.trimmingCharacters(in: .whitespacesAndNewlines) == progress.note)
             }
             TextEditor(text: $note)
                 .disabled(model.scope == .excluded)

@@ -49,6 +49,7 @@ public struct PaperRepository: Sendable {
     public var translationUsageURL: URL { rootURL.appendingPathComponent("translation-usage.json") }
     public var statusURL: URL { rootURL.appendingPathComponent("status.json") }
     public var pdfsURL: URL { rootURL.appendingPathComponent("PDFs", isDirectory: true) }
+    private var pdfIndexURL: URL { rootURL.appendingPathComponent("pdf-index.json") }
 
     public init(rootURL: URL = PaperRepository.defaultRootURL()) {
         self.rootURL = rootURL
@@ -118,7 +119,7 @@ public struct PaperRepository: Sendable {
     }
 
     public func merge(existing: [Paper], discovered: [Paper]) -> [Paper] {
-        var byID = Dictionary(uniqueKeysWithValues: existing.map { ($0.shortID, $0) })
+        var byID = Dictionary(existing.map { ($0.shortID, $0) }, uniquingKeysWith: { first, last in last.merging(preserving: first) })
         for paper in discovered {
             if let previous = byID[paper.shortID] {
                 byID[paper.shortID] = paper.merging(preserving: previous)
@@ -169,20 +170,58 @@ public struct PaperRepository: Sendable {
     }
 
     public func existingPDFURL(for paper: Paper, preferredStyle: PDFNameStyle) -> URL? {
+        try? existingPDFURLs(for: [paper], preferredStyle: preferredStyle)[paper.shortID]
+    }
+
+    public func existingPDFURLs(for papers: [Paper], preferredStyle: PDFNameStyle) throws -> [String: URL] {
+        let index = try loadPDFIndex()
+        let names = Set(index.values)
+        var result: [String: URL] = [:]
+        for paper in papers {
+            if let url = existingPDFURL(for: paper, preferredStyle: preferredStyle, index: index, ownedNames: names) {
+                result[paper.shortID] = url
+            }
+        }
+        return result
+    }
+
+    private func loadPDFIndex() throws -> [String: String] {
+        guard FileManager.default.fileExists(atPath: pdfIndexURL.path) else { return [:] }
+        return try Self.decoder.decode([String: String].self, from: Data(contentsOf: pdfIndexURL))
+    }
+
+    private func existingPDFURL(for paper: Paper, preferredStyle: PDFNameStyle, index: [String: String], ownedNames: Set<String>) -> URL? {
+        if let name = index[paper.shortID], name == URL(fileURLWithPath: name).lastPathComponent {
+            let owned = pdfsURL.appendingPathComponent(name)
+            if FileManager.default.fileExists(atPath: owned.path) { return owned }
+        }
         let preferred = pdfURL(for: paper, style: preferredStyle)
-        if FileManager.default.fileExists(atPath: preferred.path) { return preferred }
+        if !ownedNames.contains(preferred.lastPathComponent), FileManager.default.fileExists(atPath: preferred.path) { return preferred }
         let alternate: PDFNameStyle = preferredStyle == .title ? .arxivID : .title
         let fallback = pdfURL(for: paper, style: alternate)
-        return FileManager.default.fileExists(atPath: fallback.path) ? fallback : nil
+        return !ownedNames.contains(fallback.lastPathComponent) && FileManager.default.fileExists(atPath: fallback.path) ? fallback : nil
     }
 
     public func storeDownloadedPDF(from temporaryURL: URL, for paper: Paper, style: PDFNameStyle = .title) throws -> URL {
         try FileManager.default.createDirectory(at: pdfsURL, withIntermediateDirectories: true)
-        let destination = pdfURL(for: paper, style: style)
+        var index = try loadPDFIndex()
+        if let existing = existingPDFURL(for: paper, preferredStyle: style, index: index, ownedNames: Set(index.values)) {
+            // Keep the reading copy, including PDF annotations, unchanged.
+            index[paper.shortID] = existing.lastPathComponent
+            try Self.encoder.encode(index).write(to: pdfIndexURL, options: .atomic)
+            return existing
+        }
+        var destination = pdfURL(for: paper, style: style)
         if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
+            // A same-title file may belong to another paper. Never replace it.
+            let stem = destination.deletingPathExtension().lastPathComponent
+            let collision = pdfsURL.appendingPathComponent("\(stem) [\(Self.safeFilenameStem(paper.shortID, fallback: UUID().uuidString))].pdf")
+            guard !FileManager.default.fileExists(atPath: collision.path) else { throw CocoaError(.fileWriteFileExists) }
+            destination = collision
         }
         try FileManager.default.moveItem(at: temporaryURL, to: destination)
+        index[paper.shortID] = destination.lastPathComponent
+        try Self.encoder.encode(index).write(to: pdfIndexURL, options: .atomic)
         return destination
     }
 
@@ -261,16 +300,16 @@ public struct PaperRepository: Sendable {
         return finalValue.isEmpty ? "paper" : finalValue
     }
 
-    private static let encoder: JSONEncoder = {
+    private static var encoder: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         encoder.dateEncodingStrategy = .iso8601
         return encoder
-    }()
+    }
 
-    private static let decoder: JSONDecoder = {
+    private static var decoder: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
-    }()
+    }
 }

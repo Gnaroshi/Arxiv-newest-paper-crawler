@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 from .config import Settings, load_settings
 from .models import StoredPaper
+from .network import gemini_http_options
 
 
 def translate_papers(
@@ -22,7 +23,9 @@ def translate_papers(
     try:
         from google import genai
 
-        client = genai.Client(api_key=settings.google_api_key)
+        client = genai.Client(
+            api_key=settings.google_api_key, http_options=gemini_http_options()
+        )
     except Exception:
         diagnostic("Translation provider is unavailable.")
         return [dict(paper) for paper in papers]
@@ -45,6 +48,7 @@ def translate_papers(
             diagnostic(f"Failed to translate: {paper['title'][:30]}...")
         translated.append(updated)
         time.sleep(settings.translation_delay_seconds)
+    client.close()
     return translated
 
 

@@ -1,31 +1,25 @@
 from __future__ import annotations
 
-import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from arxiv_discovery.storage import load_favorites as checked_load_favorites
+from arxiv_discovery.storage import load_json as checked_load_json
+from arxiv_discovery.storage import load_papers as checked_load_papers
+from arxiv_discovery.storage import save_json as atomic_save_json
+
 
 def load_json(path: Path, default: Any) -> Any:
-    if not path.exists():
-        return deepcopy(default)
-
-    try:
-        with path.open("r", encoding="utf-8") as file:
-            return json.load(file)
-    except (json.JSONDecodeError, OSError):
-        return deepcopy(default)
+    return checked_load_json(path, deepcopy(default))
 
 
 def save_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w", encoding="utf-8") as file:
-        json.dump(payload, file, ensure_ascii=False, indent=4)
+    atomic_save_json(path, payload)
 
 
 def load_papers(path: Path) -> list[dict[str, Any]]:
-    papers = load_json(path, [])
-    return papers if isinstance(papers, list) else []
+    return checked_load_papers(path)
 
 
 def save_papers(path: Path, papers: list[dict[str, Any]]) -> None:
@@ -33,8 +27,7 @@ def save_papers(path: Path, papers: list[dict[str, Any]]) -> None:
 
 
 def load_favorite_ids(path: Path) -> list[str]:
-    favorite_ids = load_json(path, [])
-    return favorite_ids if isinstance(favorite_ids, list) else []
+    return checked_load_favorites(path)
 
 
 def save_favorite_ids(path: Path, favorite_ids: list[str]) -> None:

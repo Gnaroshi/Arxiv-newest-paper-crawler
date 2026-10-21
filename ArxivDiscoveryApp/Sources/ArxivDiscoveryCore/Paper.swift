@@ -137,6 +137,8 @@ public struct DiscoveryQuery: Equatable, Sendable {
     public var mode: DiscoveryMode
     public var topics: [SmartTopic]
     public var researchTopics: [ResearchTopic]?
+    public var start: Int
+    public var timeoutSeconds: TimeInterval
 
     public init(
         interval: DateInterval,
@@ -144,7 +146,9 @@ public struct DiscoveryQuery: Equatable, Sendable {
         categories: [String] = ["cs.AI", "cs.LG", "cs.CV", "cs.CL", "cs.NE", "stat.ML"],
         mode: DiscoveryMode = .topics,
         topics: [SmartTopic] = SmartTopic.allCases,
-        researchTopics: [ResearchTopic]? = nil
+        researchTopics: [ResearchTopic]? = nil,
+        start: Int = 0,
+        timeoutSeconds: TimeInterval = 12
     ) {
         self.interval = interval
         self.maxResults = min(max(maxResults, 1), 500)
@@ -152,5 +156,7 @@ public struct DiscoveryQuery: Equatable, Sendable {
         self.mode = mode
         self.topics = topics
         self.researchTopics = researchTopics
+        self.start = max(0, start)
+        self.timeoutSeconds = max(0.01, timeoutSeconds)
     }
 }

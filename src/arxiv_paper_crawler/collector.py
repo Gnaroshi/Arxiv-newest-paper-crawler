@@ -6,6 +6,8 @@ from typing import Any
 
 import arxiv
 
+from arxiv_discovery.network import configure_arxiv_client, download_pdf
+
 from .config import Settings
 
 
@@ -17,13 +19,9 @@ def collect_new_papers(settings: Settings) -> list[dict[str, Any]]:
     settings.ensure_runtime_directories()
 
     print(f"Collecting papers from the last {settings.days_to_search} day(s)")
-    query = " OR ".join(
-        f"cat:{category}" for category in settings.ai_categories
-    )
+    query = " OR ".join(f"cat:{category}" for category in settings.ai_categories)
     crawl_timestamp = (
-        datetime.datetime.now(datetime.timezone.utc)
-        .isoformat()
-        .replace("+00:00", "Z")
+        datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
     )
 
     today_cutoff = datetime.datetime.now().replace(
@@ -35,8 +33,13 @@ def collect_new_papers(settings: Settings) -> list[dict[str, Any]]:
     start_day = today_cutoff - datetime.timedelta(days=settings.days_to_search)
     end_time_utc = today_cutoff - datetime.timedelta(hours=9)
     start_time_utc = start_day - datetime.timedelta(hours=9)
+    end_minute = end_time_utc - datetime.timedelta(minutes=1)
+    query = (
+        f"({query}) AND submittedDate:"
+        f"[{start_time_utc:%Y%m%d%H%M} TO {end_minute:%Y%m%d%H%M}]"
+    )
 
-    client = arxiv.Client()
+    client = configure_arxiv_client(arxiv.Client())
     search = arxiv.Search(
         query=query,
         max_results=settings.max_results,
@@ -68,20 +71,24 @@ def collect_new_papers(settings: Settings) -> list[dict[str, Any]]:
                 continue
 
             try:
-                primary_subject = (
-                    result.categories[0] if result.categories else None
-                )
+                primary_subject = result.categories[0] if result.categories else None
                 subject_dir = settings.pdf_dir_for_subject(primary_subject)
-                pdf_filename = f"{sanitize_filename(result.title)}.pdf"
-                result.download_pdf(
-                    dirpath=str(subject_dir),
-                    filename=pdf_filename,
+                title = (
+                    sanitize_filename(result.title)
+                    .encode("utf-8")[:180]
+                    .decode("utf-8", errors="ignore")
                 )
+                pdf_filename = (
+                    f"{title} [{sanitize_filename(result.get_short_id())}].pdf"
+                )
+                download_pdf(result.pdf_url, subject_dir / pdf_filename)
                 print(f"Downloaded PDF: {subject_dir / pdf_filename}")
-            except Exception as exc:
-                print(f"Failed to download PDF: {result.title[:30]}... - {exc}")
+            except Exception:
+                print(f"Failed to download PDF: {result.title[:30]}...")
     except arxiv.UnexpectedEmptyPageError:
         print("Reached the end of arXiv search results.")
+    finally:
+        client._session.close()
 
     print("-" * 50)
     print(f"Found {len(new_papers)} paper(s)")

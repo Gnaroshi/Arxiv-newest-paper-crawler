@@ -123,6 +123,7 @@ public extension PaperRepository {
         guard !rules.isEmpty, rules.allSatisfy(\.isValid) else { throw TopicCleanupError.emptyTopics }
         var preview = TopicCleanupPreview(topics: topics, totalCount: papers.count, relatedCount: 0, protectedCount: 0, alreadyExcludedCount: 0, candidates: [])
         preview.researchTopics = rules
+        let localPDFs = try existingPDFURLs(for: papers, preferredStyle: .title)
         for paper in papers {
             if state.excluded[paper.shortID] != nil {
                 preview.alreadyExcludedCount += 1
@@ -136,7 +137,7 @@ public extension PaperRepository {
                     || !progress.collectionIDs.isEmpty
                     || !progress.note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     || paper.abstractKO?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
-                    || existingPDFURL(for: paper, preferredStyle: .title) != nil
+                    || localPDFs[paper.shortID] != nil
                 if userWork {
                     preview.protectedCount += 1
                 } else {

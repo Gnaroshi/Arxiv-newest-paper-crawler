@@ -24,15 +24,19 @@ public struct DiscoveryDayRecord: Codable, Equatable, Identifiable, Sendable {
     }
 
     public func covers(categories expected: Set<String>) -> Bool {
-        (mode ?? .categories) == .categories && Set(categories) == expected
+        isComplete && (mode ?? .categories) == .categories && Set(categories) == expected
     }
 
     public func covers(mode expectedMode: DiscoveryMode, categories expectedCategories: Set<String>, topics expectedTopics: Set<SmartTopic>) -> Bool {
-        guard (mode ?? .categories) == expectedMode else { return false }
+        guard isComplete, (mode ?? .categories) == expectedMode else { return false }
         return expectedMode == .topics ? Set(topics ?? []) == expectedTopics : Set(categories) == expectedCategories
     }
 
     public func covers(mode: DiscoveryMode, categories: Set<String>, researchTopics: [ResearchTopic]) -> Bool {
+        isComplete && matchesScope(mode: mode, categories: categories, researchTopics: researchTopics)
+    }
+
+    public func matchesScope(mode: DiscoveryMode, categories: Set<String>, researchTopics: [ResearchTopic]) -> Bool {
         guard (self.mode ?? .categories) == mode else { return false }
         if mode == .categories { return Set(self.categories) == categories }
         return topicSignatures == researchTopics.map(\.signature).sorted()
@@ -78,7 +82,8 @@ public enum DiscoveryDate {
     public static func date(from key: String) -> Date? {
         let parts = key.split(separator: "-").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
-        return calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2]))
+        guard let date = calendar.date(from: DateComponents(year: parts[0], month: parts[1], day: parts[2])), Self.key(for: date) == key else { return nil }
+        return date
     }
 
     public static func interval(for key: String) -> DateInterval? {

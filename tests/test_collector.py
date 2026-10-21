@@ -1,6 +1,8 @@
 from datetime import datetime
 from types import SimpleNamespace
 
+import requests
+
 from arxiv_paper_crawler.collector import collect_new_papers
 from arxiv_paper_crawler.config import load_settings
 
@@ -26,6 +28,7 @@ class FakeResult:
 class FakeClient:
     def __init__(self, result: FakeResult):
         self._result = result
+        self._session = requests.Session()
 
     def results(self, search):
         return [self._result]

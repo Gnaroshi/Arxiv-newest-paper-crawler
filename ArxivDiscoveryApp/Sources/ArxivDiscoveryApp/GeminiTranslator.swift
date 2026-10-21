@@ -45,8 +45,8 @@ struct GeminiClient {
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+        let (data, response) = try await BoundedHTTPClient(configuration: session.configuration).data(for: request, timeout: 15, maximumBytes: 2 * 1024 * 1024)
+        try validate(response: response, data: data, apiKey: apiKey)
         let result = try JSONDecoder().decode(ModelListResponse.self, from: data)
         return result.models
             .filter { $0.supportedGenerationMethods.contains("generateContent") }
@@ -72,13 +72,13 @@ struct GeminiClient {
         )
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.timeoutInterval = 45
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
         request.httpBody = try JSONEncoder().encode(payload)
 
-        let (data, response) = try await session.data(for: request)
-        try validate(response: response, data: data)
+        let (data, response) = try await BoundedHTTPClient(configuration: session.configuration).data(for: request, timeout: 30, maximumBytes: 2 * 1024 * 1024)
+        try validate(response: response, data: data, apiKey: apiKey)
         let result = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
         let text = result.candidates
             .flatMap(\.content.parts)
@@ -98,12 +98,12 @@ struct GeminiClient {
         )
     }
 
-    private func validate(response: URLResponse, data: Data) throws {
+    private func validate(response: URLResponse, data: Data, apiKey: String) throws {
         guard let httpResponse = response as? HTTPURLResponse else {
             throw GeminiTranslationError.invalidResponse
         }
         guard (200...299).contains(httpResponse.statusCode) else {
-            let message = (try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data))?.error.message
+            let message = (try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data))?.error.message.replacingOccurrences(of: apiKey, with: "[redacted]")
             throw GeminiTranslationError.httpStatus(httpResponse.statusCode, message)
         }
     }
